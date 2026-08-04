@@ -1,0 +1,8 @@
+node_modules/
+dist/
+coverage/
+*.tgz
+focalapi-out/
+.env
+.env.*
+!.env.example

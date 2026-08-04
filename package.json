@@ -1,0 +1,50 @@
+{
+  "name": "focalapi-cli",
+  "version": "0.1.0",
+  "description": "连接 focalapi 与 AI Agent 的命令行工具——让 Agent 直接调用 focalapi 的对话、图像、视频、搜索、音频等模型能力",
+  "type": "module",
+  "bin": {
+    "focalapi": "dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "skills",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "dev": "tsx src/cli.ts",
+    "build": "tsup",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "npm run build && npm test"
+  },
+  "keywords": [
+    "focalapi",
+    "ai",
+    "agent",
+    "cli",
+    "llm",
+    "image-generation",
+    "video-generation"
+  ],
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://gitee.com/xnn-ai/focalapi-cli.git"
+  },
+  "dependencies": {
+    "commander": "^12.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "tsup": "^8.2.4",
+    "tsx": "^4.19.0",
+    "typescript": "^5.5.4",
+    "vitest": "^2.1.9"
+  }
+}
