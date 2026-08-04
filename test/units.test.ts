@@ -23,15 +23,22 @@ describe('maskKey / sanitize', () => {
 
   it('sanitize 递归脱敏 key 字段与字符串中的 sk-', () => {
     const dirty = {
-      apiKey: 'sk-abcdef1234567890',
-      nested: { authorization: 'Bearer sk-abcdef1234567890' },
-      list: ['error near sk-abcdef1234567890 end'],
+      apiKey: 'sk-abcdef1234567890abcdef12',
+      nested: { authorization: 'Bearer sk-abcdef1234567890abcdef12' },
+      list: ['error near sk-abcdef1234567890abcdef12 end'],
       untouched: 42,
     };
     const clean = sanitize(dirty) as Record<string, unknown>;
-    expect(JSON.stringify(clean)).not.toContain('sk-abcdef1234567890');
-    expect((clean.nested as Record<string, unknown>).authorization).toBe('Bearer sk-ab***7890');
+    expect(JSON.stringify(clean)).not.toContain('sk-abcdef1234567890abcdef12');
+    expect((clean.nested as Record<string, unknown>).authorization).toBe('Bearer sk-ab***ef12');
     expect(clean.untouched).toBe(42);
+  });
+
+  it('不误伤含 sk- 片段的任务 ID / 文件路径（回归）', () => {
+    const taskId = 'task_nW4RVxsd3dRLrhBbG7tCHV0gaYlIAUEN';
+    const path = 'D:\\out\\task-task_nW4RVxsd3dRLrhBbG7tCHV0gaYlIAUEN.mp4';
+    expect(sanitize({ task_id: taskId })).toEqual({ task_id: taskId });
+    expect(sanitize({ file: path })).toEqual({ file: path });
   });
 });
 

@@ -121,7 +121,8 @@ export function registerGen(program: Command): void {
         const auth = resolveAuth(g);
         const body: Record<string, unknown> = { model: opts.model, prompt: promptParts.join(' ') };
         if (opts.seconds !== undefined) {
-          body.seconds = clampInt(opts.seconds, 1, MAX_TASK_DURATION_SECONDS, 'seconds');
+          // focalapi 任务 DTO 的 seconds 是字符串类型（对齐 Kling/Seedance 上游格式）
+          body.seconds = String(clampInt(opts.seconds, 1, MAX_TASK_DURATION_SECONDS, 'seconds'));
         }
         if (opts.size) body.size = opts.size;
 

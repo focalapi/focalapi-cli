@@ -158,6 +158,21 @@ describe('gen video + task', () => {
     expect(await main(argv('gen', 'video', 'x', '-m', 'm', '--seconds', '9999', '--no-wait'))).toBe(1);
     expect(spy).not.toHaveBeenCalled();
   });
+
+  it('seconds 以字符串发送（focalapi 任务 DTO 为 string 类型）', async () => {
+    let capturedBody: Record<string, unknown> | undefined;
+    vi.stubGlobal(
+      'fetch',
+      mockFetchRouter({
+        '/v1/video/generations': (init) => {
+          capturedBody = JSON.parse(String(init?.body)) as Record<string, unknown>;
+          return { task_id: 't-str', status: 'submitted' };
+        },
+      }),
+    );
+    expect(await main(argv('gen', 'video', '海浪', '-m', 'vid', '--seconds', '5', '--no-wait', '--json'))).toBe(0);
+    expect(capturedBody?.seconds).toBe('5');
+  });
 });
 
 describe('search / embed / rerank / usage', () => {

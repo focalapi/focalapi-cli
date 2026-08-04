@@ -15,6 +15,13 @@ export function isInteractive(): boolean {
   return Boolean(process.stdout.isTTY) && !process.env.CI;
 }
 
+/**
+ * API Key 形态：sk- 前缀 + 长串纯字母数字（new-api 系为 48 位）。
+ * 必须要求左侧边界 + 足够长度，否则任务 ID 这类恰好含 "sk-" 片段的字符串会被误伤
+ * （例如文件名 "task-task_nW4RVxsd...mp4" 中的 "sk-task_"）。
+ */
+const KEY_PATTERN = /(?<![A-Za-z0-9_-])sk-[A-Za-z0-9]{20,}/g;
+
 /** 脱敏 API Key：sk-ab***wxyz。短 key 全脱敏。 */
 export function maskKey(key: string): string {
   if (key.length <= 8) {
@@ -26,7 +33,7 @@ export function maskKey(key: string): string {
 /** 递归脱敏任意对象中的 apiKey/authorization 字段，防止错误体泄露。 */
 export function sanitize(value: unknown): unknown {
   if (typeof value === 'string') {
-    return value.replace(/sk-[A-Za-z0-9_-]{8,}/g, (m) => maskKey(m));
+    return value.replace(KEY_PATTERN, (m) => maskKey(m));
   }
   if (Array.isArray(value)) {
     return value.map(sanitize);
@@ -36,7 +43,7 @@ export function sanitize(value: unknown): unknown {
     for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
       if (/api[-_]?key|authorization|token/i.test(k) && typeof v === 'string') {
         // 敏感字段：先按 sk- 模式局部脱敏（如 "Bearer sk-xxx"），没有 sk- 片段则整体脱敏
-        const replaced = v.replace(/sk-[A-Za-z0-9_-]{8,}/g, (m) => maskKey(m));
+        const replaced = v.replace(KEY_PATTERN, (m) => maskKey(m));
         out[k] = replaced !== v ? replaced : maskKey(v);
       } else {
         out[k] = sanitize(v);
