@@ -145,8 +145,20 @@ focalapi connect uninstall            # 按 manifest 精确卸载，不碰其他
 | 诊断排障 | `focalapi doctor` |
 | Agent 接入 | `focalapi connect list / install / uninstall` |
 | 版本与更新检查 | `focalapi version / update` |
+| 原始只读 API 请求 | `focalapi request get /v1/models` |
 
 每个命令都自带帮助：`focalapi <command> --help`。
+
+### 原始只读请求
+
+优先使用语义化命令（如 `models`、`chat`、`gen`）。当服务新增尚未封装的读取端点时，可使用：
+
+```shell
+focalapi request get /v1/models --json
+focalapi request head /v1/models --json
+```
+
+该入口只接受站内路径与 `GET` / `HEAD`，不会隐藏任何写入操作。`--json` 时高阶命令通常直通上游响应；`request` 固定返回 `{ method, path, status, content_type, data }` 信封，错误仍为 `{ error: { code, message, hint? } }`，且不会输出完整 API Key。
 
 ## 配置
 

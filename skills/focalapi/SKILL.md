@@ -31,6 +31,7 @@ focalapi doctor             # 全链路自检（用免费演练模型，不花�
 | 文档重排序 | `focalapi rerank` | focalapi-chat |
 | 额度/用量 | `focalapi usage` / `focalapi auth status` | focalapi-usage |
 | 诊断排障 | `focalapi doctor` | focalapi-usage |
+| 读取未封装端点 | `focalapi request get /v1/... --json` | focalapi |
 
 ## Agent 使用约定
 
@@ -39,3 +40,4 @@ focalapi doctor             # 全链路自检（用免费演练模型，不花�
 3. **演练模型**：`focal-rehearsal-chat` 免费，适合做链路验证和演示。
 4. **产物路径**：生成类命令默认写入 `./focalapi-out/`，把绝对路径告诉用户。
 5. **非交互**：本 CLI 在非 TTY 环境全自动（无提示无动画），认证用环境变量 `FOCALAPI_API_KEY` 或已保存的配置。
+6. **原始请求**：优先用语义化命令；只有读取尚未封装的端点时才用 `request get` / `request head`。它只允许站内路径和 GET/HEAD，绝不用于写入操作。

@@ -18,6 +18,7 @@ import { registerRerank } from './commands/rerank.js';
 import { registerUsage } from './commands/usage.js';
 import { registerConnect } from './commands/connect.js';
 import { registerUpdate } from './commands/update.js';
+import { registerRequest } from './commands/request.js';
 
 export interface GlobalOpts {
   json?: boolean;
@@ -50,6 +51,7 @@ export function buildProgram(): Command {
   registerDoctor(program);
   registerConnect(program);
   registerUpdate(program);
+  registerRequest(program);
 
   return program;
 }

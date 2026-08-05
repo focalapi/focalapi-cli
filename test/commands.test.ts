@@ -66,6 +66,41 @@ describe('models', () => {
   });
 });
 
+describe('request', () => {
+  it('GET uses configured auth and returns a stable JSON envelope', async () => {
+    let capturedMethod: string | undefined;
+    let capturedAuthorization: string | null | undefined;
+    vi.stubGlobal(
+      'fetch',
+      mockFetchRouter({
+        '/v1/models?limit=2': (init) => {
+          capturedMethod = init?.method;
+          capturedAuthorization = new Headers(init?.headers).get('authorization');
+          return { data: [{ id: 'model-1' }] };
+        },
+      }),
+    );
+
+    expect(await main(argv('request', 'get', '/v1/models?limit=2', '--json'))).toBe(0);
+    const out = parseStdoutJson() as { method: string; path: string; status: number; data: { data: { id: string }[] } };
+    expect(capturedMethod).toBe('GET');
+    expect(capturedAuthorization).toBe(`Bearer ${VALID_KEY}`);
+    expect(out).toMatchObject({ method: 'GET', path: '/v1/models?limit=2', status: 200 });
+    expect(out.data.data[0]!.id).toBe('model-1');
+  });
+
+  it('rejects writes and external URLs before sending a request', async () => {
+    const spy = mockFetchRouter({});
+    vi.stubGlobal('fetch', spy);
+
+    expect(await main(argv('request', 'post', '/v1/models', '--json'))).toBe(1);
+    expect((parseStdoutJson() as { error: { code: string } }).error.code).toBe('invalid_request');
+    expect(await main(argv('request', 'get', 'https://example.com/', '--json'))).toBe(1);
+    expect((parseStdoutJson() as { error: { code: string } }).error.code).toBe('invalid_request');
+    expect(spy).not.toHaveBeenCalled();
+  });
+});
+
 describe('chat', () => {
   const CHAT_OK = {
     choices: [{ message: { role: 'assistant', content: '你好，世界' }, finish_reason: 'stop' }],
