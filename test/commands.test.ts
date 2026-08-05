@@ -210,34 +210,7 @@ describe('gen video + task', () => {
   });
 });
 
-describe('search / embed / rerank / usage', () => {
-  it('search --json 透传上游响应', async () => {
-    vi.stubGlobal(
-      'fetch',
-      mockFetchRouter({ '/v1/alpha/search': () => ({ results: [{ title: 'T', url: 'https://x.com' }] }) }),
-    );
-    expect(await main(argv('search', '今日新闻', '-m', 'search-model', '--json'))).toBe(0);
-    expect((parseStdoutJson() as { results: unknown[] }).results).toHaveLength(1);
-  });
-
-  it('embed --json 返回向量', async () => {
-    vi.stubGlobal(
-      'fetch',
-      mockFetchRouter({ '/v1/embeddings': () => ({ data: [{ embedding: [0.1, 0.2] }], usage: { total_tokens: 2 } }) }),
-    );
-    expect(await main(argv('embed', '文本', '-m', 'emb-model', '--json'))).toBe(0);
-    expect((parseStdoutJson() as { data: { embedding: number[] }[] }).data[0]!.embedding).toEqual([0.1, 0.2]);
-  });
-
-  it('rerank --json 返回排序结果', async () => {
-    vi.stubGlobal(
-      'fetch',
-      mockFetchRouter({ '/v1/rerank': () => ({ results: [{ index: 1, relevance_score: 0.9 }] }) }),
-    );
-    expect(await main(argv('rerank', '-m', 'rr', '--query', 'q', '--docs', '["a","b"]', '--json'))).toBe(0);
-    expect((parseStdoutJson() as { results: unknown[] }).results).toHaveLength(1);
-  });
-
+describe('usage', () => {
   it('usage --json 汇总 token 与 billing', async () => {
     vi.stubGlobal(
       'fetch',

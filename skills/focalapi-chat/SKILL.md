@@ -1,51 +1,29 @@
 ---
 name: focalapi-chat
-description: 用 focalapi 做对话、多模态理解（看图）、embedding 与 rerank。Use when 需要文本生成/总结/翻译/问答、理解图片内容、文本向量化或文档重排序。
+description: 用 DeepSeek 作为创作流程的文本备用能力，并通过 focalapi 处理音频转写和语音合成。Use when 用户需要提示词、分镜、脚本草稿、看图辅助、音频转写或文字转语音。
 ---
 
-# focalapi 对话与理解
+# focalapi 文本辅助与音频
 
-## 对话
+## DeepSeek 文本辅助
 
-```bash
-# 基础（模型名先从 focalapi models list 获取；演练用免费 focal-rehearsal-chat）
-focalapi chat "用一句话总结 RAG" -m <model>
-
-# 管道输入（处理长文本/文件内容）
-cat report.md | focalapi chat -m <model> --system "你是严谨的技术编辑"
-
-# 看图（多模态）
-focalapi chat "描述这张图的 UI 布局" -m <多模态模型> --input @screenshot.png
-
-# 机器可读输出（Agent 串联）
-focalapi chat "提取关键日期" -m <model> --json
-```
-
-- `--stream` / `--no-stream` 控制流式（TTY 默认流式，`--json` 默认非流式）。
-- `--input` 支持多张图片；txt/md/json 文件会作为文本拼入。
-- 默认模型可用 `FOCALAPI_MODEL` 环境变量固定。
-
-## 向量化
+DeepSeek 是 focalapi 唯一对外展示的通用文本备用能力。先查询可用模型，再用于提示词、分镜、旁白与轻量脚本任务：
 
 ```bash
-focalapi embed "待编码文本" -m <embedding模型> --json
-focalapi embed -m <model> --input @doc.txt --json
+focalapi models list --json
+focalapi chat "把这个产品简介写成 6 镜头分镜" -m <DeepSeek模型>
 ```
 
-## 重排序
-
-```bash
-focalapi rerank -m <rerank模型> --query "用户问题" --docs @docs.json --json
-# docs.json 是字符串数组
-```
+- 不要猜测模型 ID，也不要假设其他文本或编码模型可用。
+- 需要结构化输出时使用 `--json`；长结果可加 `--stream`。
+- `--input @image.png` 可把图片作为辅助输入；图像生成请改用 `focalapi gen image`。
 
 ## 音频
 
 ```bash
-focalapi audio transcribe meeting.mp3 -m <转写模型>          # 语音→文字
-focalapi audio speech "大家好" -m <TTS模型> --voice alloy -o out.mp3
+focalapi audio transcribe interview.mp3 -m <转写模型>
+focalapi audio speech "这里是一段旁白" -m <语音模型> -o narration.mp3
 ```
 
-## 排错
-
-失败先 `focalapi doctor`；报 model_not_found 时 `focalapi models list --filter <关键字>` 确认模型名。
+- 音频模型、可用音色和格式以 `focalapi models list --json` 为准。
+- 批量任务前先用短样本确认质量和单价。

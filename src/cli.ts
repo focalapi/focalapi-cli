@@ -11,10 +11,7 @@ import { registerChat } from './commands/chat.js';
 import { registerDoctor } from './commands/doctor.js';
 import { registerGen } from './commands/gen.js';
 import { registerTask } from './commands/task.js';
-import { registerSearch } from './commands/search.js';
 import { registerAudio } from './commands/audio.js';
-import { registerEmbed } from './commands/embed.js';
-import { registerRerank } from './commands/rerank.js';
 import { registerUsage } from './commands/usage.js';
 import { registerConnect } from './commands/connect.js';
 import { registerUpdate } from './commands/update.js';
@@ -31,7 +28,7 @@ export function buildProgram(): Command {
   const program = new Command();
   program
     .name('focalapi')
-    .description('连接 focalapi 与 AI Agent 的命令行工具：对话、图像、视频、搜索、音频、用量，一条命令直达')
+    .description('面向创作工作流的 focalapi CLI：图像、视频、音频与 DeepSeek 备用文本能力，一条命令直达')
     .version(VERSION, '-v, --version', '显示版本号')
     .option('--json', '以 JSON 输出（面向 Agent 与脚本，stdout 纯净）')
     .option('--base-url <url>', '覆盖 API 地址（默认 https://api.focalapi.com，可用 FOCALAPI_BASE_URL）')
@@ -43,10 +40,7 @@ export function buildProgram(): Command {
   registerChat(program);
   registerGen(program);
   registerTask(program);
-  registerSearch(program);
   registerAudio(program);
-  registerEmbed(program);
-  registerRerank(program);
   registerUsage(program);
   registerDoctor(program);
   registerConnect(program);

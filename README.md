@@ -2,13 +2,13 @@
 
 # focalapi-cli
 
-**给你的 AI Agent 赋予 focalapi 的全部模型能力**
+**给你的 AI Agent 赋予 focalapi 的创作模型能力**
 
 [![npm](https://img.shields.io/npm/v/focalapi-cli?color=brightgreen&label=npm)](https://www.npmjs.com/package/focalapi-cli)
 [![license](https://img.shields.io/badge/license-Apache--2.0-blue)](./LICENSE)
 [![node](https://img.shields.io/badge/node-%3E%3D18-brightgreen)](https://nodejs.org)
 
-focalapi 的对话、图像生成、视频生成、联网搜索、音频、向量、Rerank、用量查询能力，都可以通过 focalapi CLI + Skills 交给 Claude Code、Codex、OpenCode、Hermes 等本地 Agent 调用。
+focalapi 的图像、视频、音频与视觉创作能力，可以通过 focalapi CLI + Skills 交给本地 Agent 调用；DeepSeek 仅作为提示词、分镜和轻量文本的备用能力。
 
 ```shell
 npm i -g focalapi-cli
@@ -22,11 +22,9 @@ npm i -g focalapi-cli
 
 让你的 AI Agent 具备这些 focalapi 能力，并能在复杂任务中组合调用：
 
-- **模型调用**：文本对话、多模态输入（图片理解）、流式输出、管道输入
-- **图片 / 视频生成**：文生图、文生视频，产物自动下载到本地；视频任务支持异步编排
-- **联网搜索**：`/v1/alpha/search`，给 Agent 接上实时信息
+- **图片 / 视频生成**：文生图、图生图、文生视频，产物自动下载到本地；视频任务支持异步编排
 - **音频**：语音转写（transcribe）、文字转语音（speech）
-- **向量 / 重排**：embeddings 与 rerank，检索链路两件套
+- **DeepSeek 文本辅助**：提示词、分镜、旁白和轻量脚本草稿
 - **Agent 接入**：`focalapi connect` 把内置 Skills 装进本机 Agent，Agent 即刻学会调用 focalapi
 - **治理闭环**：`usage` 额度用量、`doctor` 只读诊断（用免费演练模型做端到端自检，不花额度）
 
@@ -40,7 +38,7 @@ focalapi-cli 不是让你记住更多命令，而是把 focalapi 的模型能力
 
 调用链路（Agent 视角）:
 models list 选模型
-  -> chat / gen / search / embed / rerank 调用
+  -> gen / audio / chat（DeepSeek 备用）调用
   -> 产物落盘（图像/视频/音频）
   -> usage 看额度，doctor 做诊断
 ```
@@ -71,14 +69,14 @@ export FOCALAPI_API_KEY=sk-xxxx
 
 ## 常用任务
 
-### 对话与多模态
+### DeepSeek 文本辅助
 
 ```shell
-focalapi chat "用一句话总结 RAG 的核心思想" -m focal-rehearsal-chat
+focalapi chat "把这个产品简介写成 6 镜头分镜" -m <DeepSeek模型>
 
-cat report.md | focalapi chat -m <model> --system "你是严谨的技术编辑"
+cat brief.md | focalapi chat -m <DeepSeek模型> --system "你是专业的广告分镜师"
 
-focalapi chat "描述这张图片" -m <多模态模型> --input @photo.jpg
+focalapi chat "提炼这张参考图的构图和色彩" -m <DeepSeek模型> --input @photo.jpg
 ```
 
 ### 生成图片 / 视频
@@ -93,12 +91,9 @@ focalapi task status <task_id> --json
 focalapi task download <task_id> -o ./out
 ```
 
-### 搜索 / 向量 / 重排 / 音频
+### 音频创作
 
 ```shell
-focalapi search "过去7天 AI 行业新闻" -m <搜索模型> --json
-focalapi embed "待编码文本" -m <向量模型> --json
-focalapi rerank -m <rerank模型> --query "问题" --docs @docs.json
 focalapi audio transcribe meeting.mp3 -m <转写模型>
 focalapi audio speech "大家好" -m <TTS模型> -o hello.mp3
 ```
@@ -114,9 +109,9 @@ focalapi doctor         # 全链路只读诊断，任何调用失败先跑它
 ## Agent 接入（connect）
 
 ```shell
-focalapi connect list                 # 探测本机 Agent（Claude Code / Codex / OpenCode / Hermes）
+focalapi connect list                 # 探测本机已支持的 Agent
 focalapi connect install              # 向全部检测到的 Agent 安装 skills
-focalapi connect install claude-code  # 只装指定 Agent
+focalapi connect install <agent-id>   # 只装指定 Agent
 focalapi connect uninstall            # 按 manifest 精确卸载，不碰其他文件
 ```
 
@@ -134,12 +129,10 @@ focalapi connect uninstall            # 按 manifest 精确卸载，不碰其他
 | 任务 | 命令 |
 |---|---|
 | 登录 / 状态 / 登出 | `focalapi auth login / status / logout` |
-| 对话和多模态推理 | `focalapi chat` |
+| DeepSeek 文本辅助 | `focalapi chat` |
 | 图片 / 视频生成 | `focalapi gen image / gen video` |
 | 任务查询与产物下载 | `focalapi task status / download` |
-| 联网搜索 | `focalapi search` |
 | 语音转写 / 合成 | `focalapi audio transcribe / speech` |
-| 向量化 / 重排序 | `focalapi embed / rerank` |
 | 模型查询 | `focalapi models list / get` |
 | 额度用量 | `focalapi usage` |
 | 诊断排障 | `focalapi doctor` |

@@ -31,7 +31,7 @@ describe('connect', () => {
   it('内置 skills 源目录可解析且包含全部技能', () => {
     const skills = listBundledSkills();
     expect(skills).toEqual(
-      expect.arrayContaining(['focalapi', 'focalapi-auth', 'focalapi-chat', 'focalapi-gen', 'focalapi-search', 'focalapi-usage']),
+      expect.arrayContaining(['focalapi', 'focalapi-auth', 'focalapi-chat', 'focalapi-gen', 'focalapi-usage']),
     );
   });
 
@@ -54,7 +54,7 @@ describe('connect', () => {
     expect(existsSync(join(claudeSkillsDir(), 'focalapi-gen', 'SKILL.md'))).toBe(true);
     const manifest = JSON.parse(readFileSync(manifestPath(), 'utf-8')) as { skills: string[]; tool: string };
     expect(manifest.tool).toBe('focalapi-cli');
-    expect(manifest.skills.length).toBeGreaterThanOrEqual(6);
+    expect(manifest.skills.length).toBeGreaterThanOrEqual(5);
 
     // 幂等：再装一次仍成功
     expect(await main(argv('connect', 'install', 'claude-code', '--json'))).toBe(0);

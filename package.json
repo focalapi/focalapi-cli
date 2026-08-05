@@ -1,7 +1,7 @@
 {
   "name": "focalapi-cli",
   "version": "0.1.0",
-  "description": "连接 focalapi 与 AI Agent 的命令行工具——让 Agent 直接调用 focalapi 的对话、图像、视频、搜索、音频等模型能力",
+  "description": "连接 focalapi 创作模型与 AI Agent 的命令行工具——图像、视频、音频与 DeepSeek 备用文本能力",
   "type": "module",
   "bin": {
     "focalapi": "dist/cli.js"
