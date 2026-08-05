@@ -82,14 +82,40 @@ focalapi chat "提炼这张参考图的构图和色彩" -m <DeepSeek模型> --in
 ### 生成图片 / 视频
 
 ```shell
+# 先读取模型的端点、支持参数、默认值与范围；适合 Agent 在生成前自检
+focalapi models get doubao-seedream-4-5-251128
+focalapi models get doubao-seedance-2-0-260128 --json
+
 focalapi gen image "未来城市海报" -m <图像模型> --size 1024x1024 -o ./out
+focalapi gen image "产品主视觉" -m gpt-image-2 --size 1536x1024 --quality high --background opaque -o ./out
+focalapi gen image "将背景改为雨夜" -m gpt-image-2 --image https://example.com/source.png \
+  --mask https://example.com/mask.png --response-format b64_json -o ./out
+# OpenAI 图像模型可选持久任务：立即获得 task_id，稍后查询 data[].url
+focalapi gen image "产品主视觉" -m gpt-image-2 --size 1024x1024 --no-wait --json
+focalapi task status <task_id> --json
+
+# Gemini 图像模型是原生 Gemini 端点，不走 OpenAI 图像端点
+focalapi gen gemini-image "一只水彩风格的橘猫" -m gemini-3.1-flash-image-preview \
+  --aspect-ratio 16:9 --image-size 2K -o ./out
+# Gemini native generationConfig fields can be passed through --config; named flags cover --image, --system, --seed, --thinking-level, --temperature, and --top-p. responseFormat.image and a single candidate are fixed.
 
 # 视频：默认等待完成并下载；异步编排用 --no-wait
 focalapi gen video "海浪拍打礁石" -m <视频模型> --seconds 5
+focalapi gen video "海浪拍打礁石" -m doubao-seedance-2-0-260128 \
+  --seconds 5 --resolution 720p --ratio 16:9 --generate-audio true --no-wait --json
+focalapi gen video "让海浪缓慢推进" -m doubao-seedance-2-0-260128 \
+  --image https://example.com/frame.png --generate-audio false --watermark true \
+  --return-last-frame true --callback-url https://example.com/callback \
+  --execution-expires-after 7200 --safety-identifier customer-42 --priority 4 --no-wait --json
+# Ark-compatible content (text, image_url, video_url, audio_url with roles) is available unchanged through metadata.content:
+focalapi gen video "ignored when content is supplied" -m doubao-seedance-2-0-260128 \
+  --content '[{"type":"text","text":"A cinematic ocean wave."}]' --no-wait --json
 focalapi gen video "海浪拍打礁石" -m <视频模型> --no-wait --json   # 拿 task_id
 focalapi task status <task_id> --json
 focalapi task download <task_id> -o ./out
 ```
+
+`models get` 是生成前的权威检查入口：返回 `supported_endpoint_types`、`supported_params`，并在可用时提供官方文档链接。CLI 会在本地拒绝已知的不支持参数，例如 Seedream 4.5 的低于 3.69 MP 的尺寸、Seedance Fast/Mini 的 1080p、或 Seedance 的非 4–15 秒时长；不会把这些确定会失败的请求交给上游。同步图像生成时，等待进度输出到 stderr，因此 `--json` 的 stdout 始终保持为可解析 JSON。
 
 ### 音频创作
 
@@ -131,7 +157,7 @@ focalapi connect uninstall            # 按 manifest 精确卸载，不碰其他
 | 登录 / 状态 / 登出 | `focalapi auth login / status / logout` |
 | DeepSeek 文本辅助 | `focalapi chat` |
 | 图片 / 视频生成 | `focalapi gen image / gen video` |
-| 任务查询与产物下载 | `focalapi task status / download` |
+| 任务查询与产物下载 | `focalapi task status / download`（图像任务使用 status 读取 `data[].url`） |
 | 语音转写 / 合成 | `focalapi audio transcribe / speech` |
 | 模型查询 | `focalapi models list / get` |
 | 额度用量 | `focalapi usage` |

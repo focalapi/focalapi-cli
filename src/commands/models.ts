@@ -6,6 +6,7 @@ import { Command } from 'commander';
 import { resolveAuth } from '../lib/config.js';
 import { request } from '../lib/http.js';
 import { printJson, printTable } from '../lib/output.js';
+import type { SupportedParameter } from '../lib/model-capabilities.js';
 import type { GlobalOpts } from '../cli.js';
 
 export interface ModelEntry {
@@ -18,6 +19,42 @@ export interface ModelEntry {
 
 interface ModelListResponse {
   data?: ModelEntry[];
+}
+
+function textValue(value: unknown): string {
+  if (value === null || value === undefined || value === '') return '-';
+  if (Array.isArray(value)) return value.length === 0 ? '-' : value.map(textValue).join(', ');
+  if (typeof value === 'object') return JSON.stringify(value);
+  return String(value);
+}
+
+function parameterConstraint(parameter: SupportedParameter): string {
+  const constraints: string[] = [];
+  if (parameter.required) constraints.push('必填');
+  if (parameter.default !== undefined) constraints.push(`默认 ${String(parameter.default)}`);
+  if (parameter.values?.length) constraints.push(`可选 ${parameter.values.join(' / ')}`);
+  if (parameter.minimum !== undefined || parameter.maximum !== undefined) {
+    constraints.push(`${parameter.minimum ?? '-∞'}–${parameter.maximum ?? '∞'}`);
+  }
+  return [parameter.type, ...constraints, parameter.description].join('；');
+}
+
+function printModelDetails(model: ModelEntry): void {
+  const { supported_params: supportedParams, ...summary } = model;
+  printTable(
+    ['字段', '值'],
+    Object.entries(summary).map(([key, value]) => [key, textValue(value)]),
+  );
+  if (Array.isArray(supportedParams) && supportedParams.length > 0) {
+    process.stdout.write('\n支持参数\n');
+    printTable(
+      ['参数', '约束'],
+      supportedParams.map((parameter) => {
+        const item = parameter as SupportedParameter;
+        return [item.name, parameterConstraint(item)];
+      }),
+    );
+  }
 }
 
 export function registerModels(program: Command): void {
@@ -40,8 +77,8 @@ export function registerModels(program: Command): void {
         printJson({ data: list });
       } else {
         printTable(
-          ['模型 ID', '提供方'],
-          list.map((m) => [m.id, m.owned_by ?? '-']),
+          ['模型 ID', '提供方', '支持端点'],
+          list.map((m) => [m.id, m.owned_by ?? '-', textValue(m.supported_endpoint_types)]),
         );
       }
     });
@@ -61,10 +98,7 @@ export function registerModels(program: Command): void {
       if (g.json) {
         printJson(res);
       } else {
-        printTable(
-          ['字段', '值'],
-          Object.entries(res).map(([k, v]) => [k, typeof v === 'object' ? JSON.stringify(v) : String(v)]),
-        );
+        printModelDetails(res);
       }
     });
 }

@@ -1,6 +1,6 @@
 {
   "name": "focalapi-cli",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "连接 focalapi 创作模型与 AI Agent 的命令行工具——图像、视频、音频与 DeepSeek 备用文本能力",
   "type": "module",
   "bin": {

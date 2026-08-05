@@ -66,11 +66,21 @@ export interface TaskInfo {
 }
 
 export async function fetchTask(baseUrl: string, apiKey: string, taskId: string): Promise<TaskInfo> {
-  const raw = await request<unknown>({
-    baseUrl,
-    path: `/v1/video/generations/${encodeURIComponent(taskId)}`,
-    apiKey,
-  });
+  let raw: unknown;
+  try {
+    raw = await request<unknown>({
+      baseUrl,
+      path: `/v1/video/generations/${encodeURIComponent(taskId)}`,
+      apiKey,
+    });
+  } catch (err) {
+    if (!(err instanceof ApiError) || err.status !== 404) throw err;
+    raw = await request<unknown>({
+      baseUrl,
+      path: `/v1/images/generations/${encodeURIComponent(taskId)}`,
+      apiKey,
+    });
+  }
   const obj = raw as Record<string, unknown>;
   const rawStatus = String(obj?.status ?? (obj?.data as Record<string, unknown> | undefined)?.status ?? '');
   return {

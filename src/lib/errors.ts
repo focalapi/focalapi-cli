@@ -9,13 +9,17 @@ export class ApiError extends Error {
   readonly code: string;
   readonly status?: number;
   readonly hint?: string;
+  /** 上游返回的稳定错误代码或类型；不包含密钥等敏感请求信息。 */
+  readonly upstreamCode?: string;
+  /** 可用于向服务方关联日志的请求 ID。 */
+  readonly requestId?: string;
   /** 上游原始响应体（已截断），仅调试用途，打印前需脱敏。 */
   readonly body?: unknown;
 
   constructor(
     code: string,
     message: string,
-    opts?: { status?: number; hint?: string; body?: unknown },
+    opts?: { status?: number; hint?: string; body?: unknown; upstreamCode?: string; requestId?: string },
   ) {
     super(message);
     this.name = 'ApiError';
@@ -23,15 +27,19 @@ export class ApiError extends Error {
     this.status = opts?.status;
     this.hint = opts?.hint;
     this.body = opts?.body;
+    this.upstreamCode = opts?.upstreamCode;
+    this.requestId = opts?.requestId;
   }
 
-  toJSON(): { error: { code: string; message: string; hint?: string; status?: number } } {
+  toJSON(): { error: { code: string; message: string; hint?: string; status?: number; upstream_code?: string; request_id?: string } } {
     return {
       error: {
         code: this.code,
         message: this.message,
         ...(this.hint ? { hint: this.hint } : {}),
         ...(this.status !== undefined ? { status: this.status } : {}),
+        ...(this.upstreamCode ? { upstream_code: this.upstreamCode } : {}),
+        ...(this.requestId ? { request_id: this.requestId } : {}),
       },
     };
   }
@@ -51,10 +59,12 @@ export const ERROR_HINTS: Record<string, string> = {
   timeout: '请求超时。稍后重试，或运行 focalapi doctor 检查链路质量。',
   server_error: 'focalapi 服务端错误，请稍后重试。若持续出现，请携带错误信息反馈给服务方。',
   invalid_request: '请求参数有误，请检查命令参数。',
+  authentication_failed: '鉴权失败。先运行 focalapi auth status 验证本站 Key；若本站 Key 有效，则请将请求 ID 提供给服务方排查渠道权限。',
+  upstream_auth_failed: '上游渠道鉴权失败，并不表示你的 FocalAPI Key 无效。先运行 focalapi auth status；若通过，请将请求 ID 提供给服务方排查渠道配置。',
 };
 
 /** 根据错误体里的关键字细化错误码（new-api 的错误体结构不统一，做宽容解析）。 */
-export function refineErrorCode(status: number, message: string): string {
+export function refineErrorCode(status: number, message: string, opts?: { authFailureIsInvalidApiKey?: boolean }): string {
   const m = message.toLowerCase();
   if (m.includes('quota') || m.includes('额度') || m.includes('insufficient')) {
     return 'insufficient_quota';
@@ -63,14 +73,17 @@ export function refineErrorCode(status: number, message: string): string {
     return 'model_not_found';
   }
   if (m.includes('key') || m.includes('token') || m.includes('auth')) {
-    return status === 401 || status === 403 ? 'invalid_api_key' : 'invalid_request';
+    if (status === 401 || status === 403) {
+      return opts?.authFailureIsInvalidApiKey ? 'invalid_api_key' : 'upstream_auth_failed';
+    }
+    return 'invalid_request';
   }
   switch (status) {
     case 400:
       return 'invalid_request';
     case 401:
     case 403:
-      return 'invalid_api_key';
+      return opts?.authFailureIsInvalidApiKey ? 'invalid_api_key' : 'authentication_failed';
     case 404:
       return 'model_not_found';
     case 429:

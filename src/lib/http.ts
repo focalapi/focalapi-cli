@@ -21,6 +21,8 @@ export interface RequestOptions {
   headers?: Record<string, string>;
   /** 默认 60s；视频生成等长任务调用方自行放大。 */
   timeoutMs?: number;
+  /** 仅本站 Token 校验端点可把 401/403 明确归因为本站 Key 无效。 */
+  authFailureIsInvalidApiKey?: boolean;
 }
 
 const DEFAULT_TIMEOUT_MS = 60_000;
@@ -36,7 +38,7 @@ function buildUrl(baseUrl: string, path: string, query?: RequestOptions['query']
 }
 
 /** 从响应体中提取错误消息，兼容 new-api 的多种错误结构。 */
-function extractErrorMessage(raw: string): { message: string; body?: unknown } {
+function extractErrorMessage(raw: string): { message: string; body?: unknown; upstreamCode?: string } {
   let parsed: unknown;
   try {
     parsed = JSON.parse(raw);
@@ -49,7 +51,8 @@ function extractErrorMessage(raw: string): { message: string; body?: unknown } {
     (typeof errObj?.message === 'string' && errObj.message) ||
     (typeof obj?.message === 'string' && obj.message) ||
     JSON.stringify(parsed).slice(0, 500);
-  return { message, body: parsed };
+  const upstreamCode = [errObj?.code, errObj?.type, obj?.code, obj?.type].find((value) => typeof value === 'string');
+  return { message, body: parsed, upstreamCode: typeof upstreamCode === 'string' ? upstreamCode : undefined };
 }
 
 export async function request<T = unknown>(opts: RequestOptions): Promise<T> {
@@ -104,9 +107,10 @@ export async function rawRequest(opts: RequestOptions): Promise<Response> {
 
   if (!res.ok) {
     const text = await res.text().catch(() => '');
-    const { message, body } = extractErrorMessage(text);
-    const code = refineErrorCode(res.status, message);
-    throw new ApiError(code, message, { status: res.status, body });
+    const { message, body, upstreamCode } = extractErrorMessage(text);
+    const code = refineErrorCode(res.status, message, { authFailureIsInvalidApiKey: opts.authFailureIsInvalidApiKey });
+    const requestId = res.headers.get('x-request-id') ?? res.headers.get('request-id') ?? res.headers.get('x-requestid') ?? undefined;
+    throw new ApiError(code, message, { status: res.status, body, upstreamCode, requestId });
   }
   return res;
 }

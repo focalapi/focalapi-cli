@@ -64,6 +64,42 @@ describe('models', () => {
     const out = parseStdoutJson() as { data: { id: string }[] };
     expect(out.data.map((m) => m.id)).toEqual(['focal-rehearsal-chat']);
   });
+
+  it('get 显示服务端下发的已核实模型契约，JSON 结构可供 Agent 使用', async () => {
+    vi.stubGlobal(
+      'fetch',
+      mockFetchRouter({
+        '/v1/models/doubao-seedream-4-5-251128': () => ({
+          id: 'doubao-seedream-4-5-251128',
+          object: 'model',
+          owned_by: 'comfy-cloud',
+          supported_endpoint_types: ['image-generation'],
+          supported_params: [
+            { name: 'prompt', type: 'string', required: true, description: 'Text prompt.' },
+            { name: 'size', type: 'string', default: '2048x2048', description: 'Output size.' },
+            { name: 'n', type: 'integer', default: 1, minimum: 1, maximum: 10, description: 'Image count.' },
+          ],
+        }),
+      }),
+    );
+    expect(await main(argv('models', 'get', 'doubao-seedream-4-5-251128', '--json'))).toBe(0);
+    const out = parseStdoutJson() as { supported_endpoint_types: string[]; supported_params: { name: string; minimum?: number; maximum?: number }[] };
+    expect(out.supported_endpoint_types).toContain('image-generation');
+    expect(out.supported_params.map((parameter) => parameter.name)).toEqual(expect.arrayContaining(['prompt', 'size', 'n']));
+    expect(new Set(out.supported_params.map((parameter) => parameter.name)).size).toBe(out.supported_params.length);
+    const n = out.supported_params.find((parameter) => parameter.name === 'n');
+    expect(n).toMatchObject({ minimum: 1, maximum: 10 });
+  });
+
+  it('get 的人读输出将 null 显示为缺失值，不把对象塞为字符串 null', async () => {
+    vi.stubGlobal(
+      'fetch',
+      mockFetchRouter({ '/v1/models/model-with-null': () => ({ id: 'model-with-null', owned_by: null, description: null }) }),
+    );
+    expect(await main(argv('models', 'get', 'model-with-null'))).toBe(0);
+    expect(ctx.stdout()).toContain('-');
+    expect(ctx.stdout()).not.toContain('"null"');
+  });
 });
 
 describe('request', () => {
@@ -158,6 +194,28 @@ describe('gen image', () => {
     expect(readFileSync(out.files[0]!).toString()).toBe('fake-png-bytes');
   });
 
+  it('将已公开的图像编辑参数按原字段发给 API', async () => {
+    const png = Buffer.from('fake-png-bytes').toString('base64');
+    let capturedBody: Record<string, unknown> | undefined;
+    vi.stubGlobal(
+      'fetch',
+      mockFetchRouter({
+        '/v1/images/generations': (init) => {
+          capturedBody = JSON.parse(String(init?.body)) as Record<string, unknown>;
+          return { created: 1, data: [{ b64_json: png }] };
+        },
+      }),
+    );
+
+    const outDir = join(ctx.homeDir, 'image-edit-out');
+    expect(await main(argv('gen', 'image', 'edit', '-m', 'gpt-image-2', '--image', 'https://example.com/source.png', '--mask', 'https://example.com/mask.png', '--response-format', 'b64_json', '-o', outDir, '--json'))).toBe(0);
+    expect(capturedBody).toMatchObject({
+      image: ['https://example.com/source.png'],
+      mask: 'https://example.com/mask.png',
+      response_format: 'b64_json',
+    });
+  });
+
   it('n 超上限（>128）直接拒绝，不发请求', async () => {
     const spy = mockFetchRouter({});
     vi.stubGlobal('fetch', spy);
@@ -166,6 +224,91 @@ describe('gen image', () => {
     const out = parseStdoutJson() as { error: { code: string; message: string } };
     expect(out.error.code).toBe('invalid_request');
     expect(out.error.message).toContain('1–128');
+  });
+
+  it('--no-wait 请求持久图像任务，并可由 task status 查询', async () => {
+    let preferHeader: string | null = null;
+    vi.stubGlobal(
+      'fetch',
+      mockFetchRouter({
+        '/v1/video/generations/task-image-123': () => new Response(JSON.stringify({ error: { message: 'not found' } }), { status: 404 }),
+        '/v1/images/generations/task-image-123': () => ({ object: 'image_generation_task', id: 'task-image-123', status: 'in_progress' }),
+        '/v1/images/generations': (init) => {
+          preferHeader = new Headers(init?.headers).get('Prefer');
+          return { object: 'image_generation_task', id: 'task-image-123', status: 'queued' };
+        },
+      }),
+    );
+    expect(await main(argv('gen', 'image', '一只猫', '-m', 'img-model', '--no-wait', '--json'))).toBe(0);
+    expect(preferHeader).toBe('respond-async');
+    expect((parseStdoutJson() as { task_id: string }).task_id).toBe('task-image-123');
+
+    expect(await main(argv('task', 'status', 'task-image-123', '--json'))).toBe(0);
+    expect((parseStdoutJson() as { status: string }).status).toBe('running');
+  });
+
+  it('Seedream 4.5 的不支持尺寸在发送前拒绝，并说明像素范围', async () => {
+    const spy = mockFetchRouter({});
+    vi.stubGlobal('fetch', spy);
+    expect(await main(argv('gen', 'image', 'x', '-m', 'doubao-seedream-4-5-251128', '--size', '1024x1024', '--json'))).toBe(1);
+    expect(spy).not.toHaveBeenCalled();
+    expect((parseStdoutJson() as { error: { message: string } }).error.message).toContain('3.69');
+  });
+
+  it('Gemini 图像走原生 generateContent 端点，并提取 inlineData 文件', async () => {
+    const png = Buffer.from('gemini-png-bytes').toString('base64');
+    let capturedBody: Record<string, unknown> | undefined;
+    vi.stubGlobal(
+      'fetch',
+      mockFetchRouter({
+        '/v1beta/models/gemini-3.1-flash-image-preview:generateContent': (init) => {
+          capturedBody = JSON.parse(String(init?.body)) as Record<string, unknown>;
+          return { candidates: [{ content: { parts: [{ inlineData: { mimeType: 'image/png', data: png } }] } }] };
+        },
+      }),
+    );
+    const outDir = join(ctx.homeDir, 'gemini-out');
+    expect(await main(argv('gen', 'gemini-image', '一只猫', '-m', 'gemini-3.1-flash-image-preview', '--aspect-ratio', '16:9', '--image-size', '2K', '-o', outDir, '--json'))).toBe(0);
+    expect(capturedBody).toMatchObject({
+      contents: [{ role: 'user', parts: [{ text: '一只猫' }] }],
+      generationConfig: { candidateCount: 1, responseFormat: { image: { aspectRatio: '16:9', imageSize: '2K' } } },
+    });
+    const out = parseStdoutJson() as { files: string[] };
+    expect(readFileSync(out.files[0]!).toString()).toBe('gemini-png-bytes');
+  });
+});
+
+describe('gen gemini-image documented fields', () => {
+  it('maps image, system, seed, and Lite sampling fields', async () => {
+    const png = Buffer.from('gemini-png-bytes').toString('base64');
+    let capturedBody: Record<string, unknown> | undefined;
+    vi.stubGlobal(
+      'fetch',
+      mockFetchRouter({
+        '/v1beta/models/gemini-3.1-flash-lite-image-preview:generateContent': (init) => {
+          capturedBody = JSON.parse(String(init?.body)) as Record<string, unknown>;
+          return { candidates: [{ content: { parts: [{ inlineData: { mimeType: 'image/png', data: png } }] } }] };
+        },
+      }),
+    );
+
+    const outDir = join(ctx.homeDir, 'gemini-fields-out');
+    expect(await main(argv(
+      'gen', 'gemini-image', 'draw it', '-m', 'gemini-3.1-flash-lite-image-preview',
+      '--image', 'data:image/png;base64,ZmFrZQ==', '--system', 'Be concise.', '--seed', '7',
+      '--thinking-level', 'HIGH', '--temperature', '1.2', '--top-p', '0.8', '-o', outDir, '--json',
+    ))).toBe(0);
+    expect(capturedBody).toMatchObject({
+      contents: [{ role: 'user', parts: [{ text: 'draw it' }, { inlineData: { mimeType: 'image/png', data: 'ZmFrZQ==' } }] }],
+      systemInstruction: { parts: [{ text: 'Be concise.' }] },
+      generationConfig: {
+        candidateCount: 1,
+        seed: 7,
+        thinkingConfig: { thinkingLevel: 'HIGH' },
+        temperature: 1.2,
+        topP: 0.8,
+      },
+    });
   });
 });
 
@@ -206,7 +349,88 @@ describe('gen video + task', () => {
       }),
     );
     expect(await main(argv('gen', 'video', '海浪', '-m', 'vid', '--seconds', '5', '--no-wait', '--json'))).toBe(0);
-    expect(capturedBody?.seconds).toBe('5');
+    expect(capturedBody?.duration).toBe(5);
+    expect(capturedBody?.seconds).toBeUndefined();
+  });
+
+  it('Seedance 原生参数进入 metadata，并在本地拒绝不支持的分辨率', async () => {
+    let capturedBody: Record<string, unknown> | undefined;
+    vi.stubGlobal(
+      'fetch',
+      mockFetchRouter({
+        '/v1/video/generations': (init) => {
+          capturedBody = JSON.parse(String(init?.body)) as Record<string, unknown>;
+          return { task_id: 'seedance-1', status: 'submitted' };
+        },
+      }),
+    );
+    expect(await main(argv('gen', 'video', '海浪', '-m', 'doubao-seedance-2-0-260128', '--seconds', '5', '--resolution', '720p', '--ratio', '16:9', '--generate-audio', 'true', '--no-wait', '--json'))).toBe(0);
+    expect(capturedBody?.duration).toBe(5);
+    expect(capturedBody?.metadata).toMatchObject({ resolution: '720p', ratio: '16:9', generate_audio: true });
+
+    const spy = mockFetchRouter({});
+    vi.stubGlobal('fetch', spy);
+    expect(await main(argv('gen', 'video', 'x', '-m', 'doubao-seedance-2-0-fast-260128', '--resolution', '1080p', '--no-wait', '--json'))).toBe(1);
+    expect(spy).not.toHaveBeenCalled();
+
+    expect(await main(argv('gen', 'video', 'x', '-m', 'doubao-seedance-2-0-260128', '--priority', '10', '--no-wait', '--json'))).toBe(1);
+    expect(spy).not.toHaveBeenCalled();
+    expect(await main(argv('gen', 'video', 'x', '-m', 'doubao-seedance-2-0-260128', '--service-tier', 'priority', '--no-wait', '--json'))).toBe(1);
+    expect(spy).not.toHaveBeenCalled();
+  });
+
+  it('将 Seedance 任务控制参数和图生视频输入映射到公开的字段', async () => {
+    let capturedBody: Record<string, unknown> | undefined;
+    vi.stubGlobal(
+      'fetch',
+      mockFetchRouter({
+        '/v1/video/generations': (init) => {
+          capturedBody = JSON.parse(String(init?.body)) as Record<string, unknown>;
+          return { task_id: 'seedance-controls', status: 'submitted' };
+        },
+      }),
+    );
+
+    expect(await main(argv(
+      'gen', 'video', '海浪', '-m', 'doubao-seedance-2-0-260128', '--image', 'https://example.com/frame.png',
+      '--generate-audio', 'false', '--watermark', 'true', '--return-last-frame', 'true',
+      '--callback-url', 'https://example.com/callback', '--execution-expires-after', '7200',
+      '--safety-identifier', 'customer-42', '--priority', '4', '--no-wait', '--json',
+    ))).toBe(0);
+    expect(capturedBody).toMatchObject({
+      images: ['https://example.com/frame.png'],
+      metadata: {
+        generate_audio: false,
+        watermark: true,
+        return_last_frame: true,
+        callback_url: 'https://example.com/callback',
+        execution_expires_after: 7200,
+        safety_identifier: 'customer-42',
+        priority: 4,
+      },
+    });
+  });
+});
+
+describe('gen video metadata content', () => {
+  it('allows documented Ark content through metadata.content', async () => {
+    let capturedBody: Record<string, unknown> | undefined;
+    vi.stubGlobal(
+      'fetch',
+      mockFetchRouter({
+        '/v1/video/generations': (init) => {
+          capturedBody = JSON.parse(String(init?.body)) as Record<string, unknown>;
+          return { task_id: 'seedance-content', status: 'submitted' };
+        },
+      }),
+    );
+
+    const content = JSON.stringify([{ type: 'text', text: 'Use this exact prompt.' }]);
+    expect(await main(argv(
+      'gen', 'video', 'ignored facade prompt', '-m', 'doubao-seedance-2-0-260128',
+      '--content', content, '--no-wait', '--json',
+    ))).toBe(0);
+    expect(capturedBody?.metadata).toMatchObject({ content: [{ type: 'text', text: 'Use this exact prompt.' }] });
   });
 });
 
@@ -223,6 +447,19 @@ describe('usage', () => {
     const out = parseStdoutJson() as { token: { total_available: number }; billing: { total_usage: number } };
     expect(out.token.total_available).toBe(750000);
     expect(out.billing.total_usage).toBe(12.34);
+  });
+
+  it('人读输出将账单对象拆为总用量和对象类型', async () => {
+    vi.stubGlobal(
+      'fetch',
+      mockFetchRouter({
+        '/api/usage/token/': () => TOKEN_USAGE_OK,
+        '/v1/dashboard/billing/usage': () => ({ object: 'list', total_usage: 1234.5678 }),
+      }),
+    );
+    expect(await main(argv('usage'))).toBe(0);
+    expect(ctx.stdout()).toContain('1,234.5678');
+    expect(ctx.stdout()).not.toContain('{"object"');
   });
 });
 

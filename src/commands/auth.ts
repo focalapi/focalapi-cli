@@ -44,6 +44,7 @@ export async function fetchTokenUsage(baseUrl: string, apiKey: string): Promise<
     path: '/api/usage/token/',
     apiKey,
     timeoutMs: 15_000,
+    authFailureIsInvalidApiKey: true,
   });
   if (!res.data) {
     throw new ApiError('bad_response', '用量接口响应缺少 data 字段');

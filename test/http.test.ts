@@ -39,7 +39,7 @@ describe('http.request', () => {
     vi.stubGlobal('fetch', async () => jsonResponse(401, { error: { message: 'Invalid API key provided' } }));
     const err = await request({ baseUrl: BASE, path: '/x' }).catch((e) => e);
     expect(err).toBeInstanceOf(ApiError);
-    expect((err as ApiError).code).toBe('invalid_api_key');
+    expect((err as ApiError).code).toBe('upstream_auth_failed');
   });
 
   it('错误消息含 quota → insufficient_quota（即使状态码是 400）', async () => {

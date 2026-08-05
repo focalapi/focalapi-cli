@@ -13,6 +13,15 @@ import { printJson, printTable } from '../lib/output.js';
 import type { GlobalOpts } from '../cli.js';
 import { fetchTokenUsage } from './auth.js';
 
+function formatBillingUsage(billing: Record<string, unknown>): string {
+  const value = billing.total_usage;
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value.toLocaleString('zh-CN', { maximumFractionDigits: 4 });
+  }
+  if (typeof value === 'string' && value.trim() !== '') return value;
+  return '-';
+}
+
 function defaultStartDate(): string {
   const now = new Date();
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
@@ -55,7 +64,8 @@ export function registerUsage(program: Command): void {
           ['已用', String(token.total_used)],
           ['剩余', token.unlimited_quota ? '无限' : String(token.total_available)],
           ['过期时间', token.expires_at > 0 ? new Date(token.expires_at * 1000).toLocaleString() : '永不过期'],
-          [`周期用量（${start} ~ ${end}）`, JSON.stringify(billing)],
+          [`周期用量（${start} ~ ${end}）`, formatBillingUsage(billing)],
+          ['账单对象', typeof billing.object === 'string' ? billing.object : '-'],
         ],
       );
     });

@@ -77,6 +77,12 @@ export function printError(err: unknown, opts?: OutputOptions): void {
       if (hint) {
         process.stderr.write(`提示：${hint}\n`);
       }
+      if (err.upstreamCode) {
+        process.stderr.write(`上游代码：${err.upstreamCode}\n`);
+      }
+      if (err.requestId) {
+        process.stderr.write(`请求 ID：${err.requestId}\n`);
+      }
     }
     return;
   }
