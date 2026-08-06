@@ -121,6 +121,15 @@ function parseJsonArray(raw: string, option: string): unknown[] {
   }
 }
 
+function parseGeminiResponseModalities(raw: string): string[] {
+  const modalities = raw.split(',').map((value) => value.trim().toUpperCase()).filter(Boolean);
+  const unique = new Set(modalities);
+  if (unique.size !== modalities.length || !unique.has('IMAGE') || [...unique].some((value) => value !== 'IMAGE' && value !== 'TEXT')) {
+    throw new ApiError('invalid_request', '--response-modalities must be IMAGE or IMAGE,TEXT');
+  }
+  return unique.has('TEXT') ? ['IMAGE', 'TEXT'] : ['IMAGE'];
+}
+
 function geminiImagePart(source: string): Record<string, unknown> {
   const dataUri = /^data:([^;,]+);base64,([a-z0-9+/=\r\n]+)$/i.exec(source.trim());
   if (dataUri) {
@@ -223,6 +232,7 @@ export function registerGen(program: Command): void {
     .requiredOption('-m, --model <model>', 'Gemini 图像模型 ID；先用 focalapi models get 确认')
     .option('--aspect-ratio <ratio>', '画面比例，例如 1:1、16:9、auto')
     .option('--image-size <size>', '输出尺寸，例如 1K、2K、4K')
+    .option('--response-modalities <modalities>', '输出类型：IMAGE 或 IMAGE,TEXT；未传时由服务端默认 IMAGE,TEXT')
     .option('--config <json>', '附加 Gemini generationConfig JSON；命令固定 responseFormat.image 和单候选')
     .option('-o, --out <dir>', '输出目录', DEFAULT_OUT_DIR)
     .option('--image <url...>', 'Gemini reference image URL or data URI; repeatable')
@@ -231,7 +241,7 @@ export function registerGen(program: Command): void {
     .option('--thinking-level <level>', 'Nano Banana 2 Lite: MINIMAL or HIGH')
     .option('--temperature <n>', 'Nano Banana 2 Lite: 0 through 2', (v) => Number.parseFloat(v))
     .option('--top-p <n>', 'Nano Banana 2 Lite: 0 through 1', (v) => Number.parseFloat(v))
-    .action(async (promptParts: string[], opts: { model: string; aspectRatio?: string; imageSize?: string; image?: string[]; system?: string; seed?: number; thinkingLevel?: string; temperature?: number; topP?: number; config?: string; out: string }, cmd: Command) => {
+    .action(async (promptParts: string[], opts: { model: string; aspectRatio?: string; imageSize?: string; responseModalities?: string; image?: string[]; system?: string; seed?: number; thinkingLevel?: string; temperature?: number; topP?: number; config?: string; out: string }, cmd: Command) => {
       const g = cmd.optsWithGlobals() as GlobalOpts;
       const auth = resolveAuth(g);
       validateGeminiImageGeneration(opts.model, {
@@ -258,6 +268,7 @@ export function registerGen(program: Command): void {
         ...suppliedConfig,
         candidateCount: 1,
         responseFormat: { image: imageConfig },
+        ...(opts.responseModalities ? { responseModalities: parseGeminiResponseModalities(opts.responseModalities) } : {}),
         ...(opts.seed !== undefined ? { seed: opts.seed } : {}),
         ...(opts.thinkingLevel ? { thinkingConfig: { ...(suppliedConfig.thinkingConfig as Record<string, unknown> ?? {}), thinkingLevel: opts.thinkingLevel.toUpperCase() } } : {}),
         ...(opts.temperature !== undefined ? { temperature: opts.temperature } : {}),
@@ -296,7 +307,7 @@ export function registerGen(program: Command): void {
     .description('生成视频（任务制：默认轮询至完成并下载；--no-wait 只取 task_id）')
     .argument('<prompt...>', '提示词')
     .requiredOption('-m, --model <model>', '视频模型 ID（focalapi models list 查看）')
-    .option('--seconds <n>', '时长秒数（1–3600）', (v) => Number.parseInt(v, 10))
+    .option('--seconds <n>', '时长秒数（当前可用视频模型为 4–15；精确范围运行 focalapi models get <model> 查看）', (v) => Number.parseInt(v, 10))
     .option('--size <size>', '分辨率，如 1280x720')
     .option('--resolution <resolution>', '原生输出分辨率，如 480p、720p、1080p、4k')
     .option('--ratio <ratio>', '原生宽高比，如 16:9、9:16、adaptive')

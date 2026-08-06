@@ -268,10 +268,10 @@ describe('gen image', () => {
       }),
     );
     const outDir = join(ctx.homeDir, 'gemini-out');
-    expect(await main(argv('gen', 'gemini-image', '一只猫', '-m', 'gemini-3.1-flash-image-preview', '--aspect-ratio', '16:9', '--image-size', '2K', '-o', outDir, '--json'))).toBe(0);
+    expect(await main(argv('gen', 'gemini-image', '一只猫', '-m', 'gemini-3.1-flash-image-preview', '--aspect-ratio', '16:9', '--image-size', '2K', '--response-modalities', 'IMAGE', '-o', outDir, '--json'))).toBe(0);
     expect(capturedBody).toMatchObject({
       contents: [{ role: 'user', parts: [{ text: '一只猫' }] }],
-      generationConfig: { candidateCount: 1, responseFormat: { image: { aspectRatio: '16:9', imageSize: '2K' } } },
+      generationConfig: { candidateCount: 1, responseModalities: ['IMAGE'], responseFormat: { image: { aspectRatio: '16:9', imageSize: '2K' } } },
     });
     const out = parseStdoutJson() as { files: string[] };
     expect(readFileSync(out.files[0]!).toString()).toBe('gemini-png-bytes');
