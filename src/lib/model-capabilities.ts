@@ -36,12 +36,14 @@ type ImageGenerationConstraint = {
 };
 
 type VideoGenerationConstraint = {
-  resolutions: string[];
-  ratios?: string[];
-  aspectRatios?: string[];
-  minSeconds: number;
-  maxSeconds: number;
-  supportsPriority?: boolean;
+	resolutions: string[];
+	ratios?: string[];
+	aspectRatios?: string[];
+	minSeconds: number;
+	maxSeconds: number;
+	allowedSeconds?: number[];
+	requiredSecondsByResolution?: Record<string, number>;
+	supportsPriority?: boolean;
   supportsSeed?: boolean;
 };
 
@@ -132,7 +134,19 @@ const SEEDANCE_RATIOS = ['adaptive', '16:9', '4:3', '1:1', '3:4', '9:16', '21:9'
 const GROK_VIDEO_ASPECT_RATIOS = ['auto', '16:9', '4:3', '3:2', '1:1', '2:3', '3:4', '9:16'];
 
 const VIDEO_CONSTRAINTS: Record<string, VideoGenerationConstraint> = {
-  'dreamina-seedance-2-0-260128': {
+	'veo-3.1-generate-preview': {
+		resolutions: ['720p', '1080p', '4k'], ratios: ['16:9', '9:16'], minSeconds: 4, maxSeconds: 8,
+		allowedSeconds: [4, 6, 8], requiredSecondsByResolution: { '1080p': 8, '4k': 8 }, supportsSeed: true,
+	},
+	'veo-3.1-fast-generate-preview': {
+		resolutions: ['720p', '1080p', '4k'], ratios: ['16:9', '9:16'], minSeconds: 4, maxSeconds: 8,
+		allowedSeconds: [4, 6, 8], requiredSecondsByResolution: { '1080p': 8, '4k': 8 }, supportsSeed: true,
+	},
+	'veo-3.1-lite-generate-preview': {
+		resolutions: ['720p', '1080p'], ratios: ['16:9', '9:16'], minSeconds: 4, maxSeconds: 8,
+		allowedSeconds: [4, 6, 8], requiredSecondsByResolution: { '1080p': 8 }, supportsSeed: true,
+	},
+	'dreamina-seedance-2-0-260128': {
     resolutions: ['480p', '720p', '1080p', '4k'], ratios: SEEDANCE_RATIOS, minSeconds: 4, maxSeconds: 15, supportsPriority: true,
   },
   'dreamina-seedance-2-0-fast-260128': {
@@ -318,12 +332,21 @@ export function validateVideoGeneration(
 ): void {
   const constraint = VIDEO_CONSTRAINTS[model.trim()];
   if (!constraint) return;
-  if (input.seconds !== undefined && (input.seconds < constraint.minSeconds || input.seconds > constraint.maxSeconds)) {
-    throw new ApiError('invalid_request', `${model} seconds must be ${constraint.minSeconds}-${constraint.maxSeconds} (received: ${input.seconds})`);
-  }
-  if (input.resolution && !constraint.resolutions.includes(input.resolution.toLowerCase())) {
+	if (input.seconds !== undefined && (input.seconds < constraint.minSeconds || input.seconds > constraint.maxSeconds)) {
+		throw new ApiError('invalid_request', `${model} seconds must be ${constraint.minSeconds}-${constraint.maxSeconds} (received: ${input.seconds})`);
+	}
+	if (input.seconds !== undefined && constraint.allowedSeconds && !constraint.allowedSeconds.includes(input.seconds)) {
+		throw new ApiError('invalid_request', `${model} seconds must be one of ${constraint.allowedSeconds.join(', ')} (received: ${input.seconds})`);
+	}
+	if (input.resolution && !constraint.resolutions.includes(input.resolution.toLowerCase())) {
     throw new ApiError('invalid_request', `${model} resolution must be one of ${constraint.resolutions.join(', ')} (received: ${input.resolution})`);
-  }
+	}
+	if (input.seconds !== undefined && input.resolution) {
+		const required = constraint.requiredSecondsByResolution?.[input.resolution.toLowerCase()];
+		if (required !== undefined && input.seconds !== required) {
+			throw new ApiError('invalid_request', `${model} resolution ${input.resolution} requires ${required} seconds`);
+		}
+	}
   if (input.ratio) {
     if (!constraint.ratios) {
       throw new ApiError('invalid_request', `${model} uses --aspect-ratio instead of --ratio`);

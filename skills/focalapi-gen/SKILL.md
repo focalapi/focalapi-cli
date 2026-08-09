@@ -56,3 +56,22 @@ focalapi gen video "航拍海岸线" -m grok-imagine-video-1.5 \
 - Seedance 2.0 系列时长为 4–15 秒；2.5 为 4–30 秒；Grok 视频为 1–15 秒。实际可用范围以 `models get` 为准。
 - 视频默认轮询到完成并下载。编排长任务时用 `--no-wait --json`，然后执行 `focalapi task status <task-id> --json` 和 `focalapi task download <task-id> -o ./out`。
 - 使用 `--content <json>` 时，内容进入 `metadata.content`；仍需使用已验证的模型和参数。
+
+## Gemini Omni and Veo 3.1
+
+`gemini-omni-flash-preview` uses Gemini's native synchronous Interactions API,
+not the task endpoint. Use the dedicated command and pass reference images as
+base64 data URIs:
+
+```bash
+focalapi gen omni-video "A paper boat on a moonlit river" \
+  --image data:image/png;base64,... --aspect-ratio 9:16 \
+  --task image_to_video -o ./out --json
+```
+
+For Veo 3.1, continue to use `gen video` with the official model IDs:
+`veo-3.1-generate-preview`, `veo-3.1-fast-generate-preview`, and
+`veo-3.1-lite-generate-preview`. They support 4, 6, or 8 seconds and 16:9 or
+9:16. 1080p requires 8 seconds; 4k also requires 8 seconds and is unavailable
+on Lite. Check `focalapi models get <model-id> --json` before selecting a
+resolution.

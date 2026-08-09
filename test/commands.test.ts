@@ -376,6 +376,47 @@ describe('gen gemini-image documented fields', () => {
   });
 });
 
+describe('gen omni-video', () => {
+  it('uses the native Interactions API, retains the official model ID, and saves inline video', async () => {
+    const video = Buffer.from('gemini-omni-video').toString('base64');
+    let capturedBody: Record<string, unknown> | undefined;
+    vi.stubGlobal(
+      'fetch',
+      mockFetchRouter({
+        '/v1beta/interactions': (init) => {
+          capturedBody = JSON.parse(String(init?.body)) as Record<string, unknown>;
+          return {
+            id: 'interaction-123',
+            steps: [{ content: [{ type: 'video', mime_type: 'video/mp4', data: video }] }],
+          };
+        },
+      }),
+    );
+
+    const outDir = join(ctx.homeDir, 'gemini-omni-out');
+    expect(await main(argv(
+      'gen', 'omni-video', 'a dancing robot', '--image', 'data:image/png;base64,ZmFrZQ==',
+      '--aspect-ratio', '9:16', '--task', 'image_to_video', '-o', outDir, '--json',
+    ))).toBe(0);
+    expect(capturedBody).toMatchObject({
+      model: 'gemini-omni-flash-preview',
+      input: [{ type: 'image', mime_type: 'image/png', data: 'ZmFrZQ==' }, { type: 'text', text: 'a dancing robot' }],
+      response_format: { type: 'video', aspect_ratio: '9:16' },
+      generation_config: { video_config: { task: 'image_to_video' } },
+    });
+    const out = parseStdoutJson() as { interaction_id: string; file: string };
+    expect(out.interaction_id).toBe('interaction-123');
+    expect(readFileSync(out.file).toString()).toBe('gemini-omni-video');
+  });
+
+  it('rejects non-data-URI image input before making an API request', async () => {
+    const spy = mockFetchRouter({});
+    vi.stubGlobal('fetch', spy);
+    expect(await main(argv('gen', 'omni-video', 'x', '--image', 'https://example.com/image.png', '--json'))).toBe(1);
+    expect(spy).not.toHaveBeenCalled();
+  });
+});
+
 describe('gen video + task', () => {
   it('--no-wait 立即返回 task_id；task status 归一化状态', async () => {
     vi.stubGlobal(
@@ -496,6 +537,38 @@ describe('gen video + task', () => {
     const spy = mockFetchRouter({});
     vi.stubGlobal('fetch', spy);
     expect(await main(argv('gen', 'video', 'x', '-m', 'dreamina-seedance-2-5-260628', '--seconds', '31', '--no-wait', '--json'))).toBe(1);
+    expect(spy).not.toHaveBeenCalled();
+  });
+
+  it('enforces the official Veo 3.1 duration and resolution matrix before submitting', async () => {
+    let capturedBody: Record<string, unknown> | undefined;
+    vi.stubGlobal(
+      'fetch',
+      mockFetchRouter({
+        '/v1/video/generations': (init) => {
+          capturedBody = JSON.parse(String(init?.body)) as Record<string, unknown>;
+          return { task_id: 'veo-31', status: 'submitted' };
+        },
+      }),
+    );
+    expect(await main(argv(
+      'gen', 'video', 'cinematic ocean', '-m', 'veo-3.1-generate-preview',
+      '--seconds', '8', '--resolution', '4k', '--ratio', '16:9', '--no-wait', '--json',
+    ))).toBe(0);
+    expect(capturedBody).toMatchObject({
+      model: 'veo-3.1-generate-preview', duration: 8, metadata: { resolution: '4k', ratio: '16:9' },
+    });
+
+    const spy = mockFetchRouter({});
+    vi.stubGlobal('fetch', spy);
+    expect(await main(argv(
+      'gen', 'video', 'x', '-m', 'veo-3.1-fast-generate-preview',
+      '--seconds', '6', '--resolution', '1080p', '--no-wait', '--json',
+    ))).toBe(1);
+    expect(await main(argv(
+      'gen', 'video', 'x', '-m', 'veo-3.1-lite-generate-preview',
+      '--seconds', '8', '--resolution', '4k', '--no-wait', '--json',
+    ))).toBe(1);
     expect(spy).not.toHaveBeenCalled();
   });
 });

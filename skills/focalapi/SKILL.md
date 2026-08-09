@@ -14,6 +14,13 @@ focalapi models search image --endpoint image-generation --json
 focalapi models get <model-id> --json
 ```
 
+For Gemini native video, use `focalapi gen omni-video` with
+`gemini-omni-flash-preview`; it calls `/v1beta/interactions` and writes the
+inline video response to disk. Veo 3.1 task models are
+`veo-3.1-generate-preview`, `veo-3.1-fast-generate-preview`, and
+`veo-3.1-lite-generate-preview`; use `focalapi gen video -m <model-id>` and
+read `focalapi models get <model-id> --json` for the current contract.
+
 `models get` 返回的 `supported_endpoint_types` 和 `supported_params` 是当前 Key 的权威契约。模型列表与详情不一致时，以详情报错为准，重新选择列表中可读取详情的模型。
 
 | 需求 | 命令 | 进一步技能 |

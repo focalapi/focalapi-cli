@@ -41,6 +41,17 @@ interface GeminiImageResponse {
   }>;
 }
 
+interface GeminiOmniInteractionResponse {
+	id?: string;
+	steps?: Array<{
+		content?: Array<{
+			type?: string;
+			data?: string;
+			mime_type?: string;
+		}>;
+	}>;
+}
+
 function clampInt(value: number, min: number, max: number, name: string): number {
   if (!Number.isInteger(value) || value < min || value > max) {
     throw new ApiError('invalid_request', `${name} 必须是 ${min}–${max} 的整数（收到：${value}）`);
@@ -137,6 +148,26 @@ function geminiImagePart(source: string): Record<string, unknown> {
     return { inlineData: { mimeType, data: data.replace(/[\r\n]/g, '') } };
   }
   return { fileData: { fileUri: source } };
+}
+
+function geminiOmniImageInput(source: string): Record<string, unknown> {
+	const dataUri = /^data:([^;,]+);base64,([a-z0-9+/=\r\n]+)$/i.exec(source.trim());
+	if (!dataUri) {
+		throw new ApiError('invalid_request', '--image for Gemini Omni must be a base64 data URI');
+	}
+	const [, mimeType = '', data = ''] = dataUri;
+	return { type: 'image', mime_type: mimeType, data: data.replace(/[\r\n]/g, '') };
+}
+
+function extractGeminiOmniVideo(response: GeminiOmniInteractionResponse): { data: string; mimeType?: string } | undefined {
+	for (const step of response.steps ?? []) {
+		for (const content of step.content ?? []) {
+			if (content.type === 'video' && content.data) {
+				return { data: content.data, mimeType: content.mime_type };
+			}
+		}
+	}
+	return undefined;
 }
 
 function extractGeminiImageItems(response: GeminiImageResponse): ImageResultItem[] {
@@ -318,6 +349,63 @@ export function registerGen(program: Command): void {
         printJson({ files, count: files.length });
       } else {
         for (const file of files) info(`✓ ${file}`);
+      }
+    });
+
+  gen.command('omni-video')
+    .description('使用 Gemini Omni Flash 原生 Interactions API 生成或编辑视频')
+    .argument('<prompt...>', '提示词')
+    .option('--image <data-uri...>', '图生视频参考图；仅支持 base64 data URI，可多个')
+    .option('--previous-interaction-id <id>', '上一次交互 ID，用于连续视频编辑')
+    .option('--aspect-ratio <ratio>', '画面比例：16:9 或 9:16')
+    .option('--task <task>', '视频任务：text_to_video、image_to_video、reference_to_video 或 edit')
+    .option('-o, --out <dir>', '输出目录', DEFAULT_OUT_DIR)
+    .action(async (
+      promptParts: string[],
+      opts: { image?: string[]; previousInteractionId?: string; aspectRatio?: string; task?: string; out: string },
+      cmd: Command,
+    ) => {
+      const g = cmd.optsWithGlobals() as GlobalOpts;
+      const auth = resolveAuth(g);
+      if (opts.aspectRatio && !['16:9', '9:16'].includes(opts.aspectRatio)) {
+        throw new ApiError('invalid_request', '--aspect-ratio must be 16:9 or 9:16');
+      }
+      if (opts.task && !['text_to_video', 'image_to_video', 'reference_to_video', 'edit'].includes(opts.task)) {
+        throw new ApiError('invalid_request', '--task must be text_to_video, image_to_video, reference_to_video, or edit');
+      }
+      const prompt = promptParts.join(' ');
+      const imageInputs = (opts.image ?? []).map(geminiOmniImageInput);
+      const input: string | Array<Record<string, unknown>> = imageInputs.length === 0
+        ? prompt
+        : [...imageInputs, { type: 'text', text: prompt }];
+      const res = await withProgress('正在生成 Gemini Omni 视频', () => request<GeminiOmniInteractionResponse>({
+        baseUrl: auth.baseUrl,
+        path: '/v1beta/interactions',
+        apiKey: auth.apiKey,
+        body: {
+          model: 'gemini-omni-flash-preview',
+          input,
+          ...(opts.previousInteractionId ? { previous_interaction_id: opts.previousInteractionId } : {}),
+          ...(opts.aspectRatio ? { response_format: { type: 'video', aspect_ratio: opts.aspectRatio } } : {}),
+          ...(opts.task ? { generation_config: { video_config: { task: opts.task } } } : {}),
+        },
+        timeoutMs: 600_000,
+      }));
+      const video = extractGeminiOmniVideo(res);
+      if (!video) {
+        throw new ApiError('bad_response', 'Gemini Omni 响应中未找到视频数据', { body: res });
+      }
+      const dir = resolve(opts.out);
+      await mkdir(dir, { recursive: true });
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+      const extension = video.mimeType?.includes('webm') ? '.webm' : '.mp4';
+      const file = join(dir, `gemini-omni-${timestamp}${extension}`);
+      await writeFile(file, Buffer.from(video.data, 'base64'));
+      if (g.json) {
+        printJson({ interaction_id: res.id, file });
+      } else {
+        info(`✓ ${file}`);
+        if (res.id) info(`交互 ID：${res.id}`);
       }
     });
 
