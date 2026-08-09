@@ -83,8 +83,9 @@ focalapi chat "提炼这张参考图的构图和色彩" -m <DeepSeek模型> --in
 
 ```shell
 # 先读取模型的端点、支持参数、默认值与范围；适合 Agent 在生成前自检
-focalapi models get doubao-seedream-4-5-251128
-focalapi models get doubao-seedance-2-0-260128 --json
+focalapi models search image --endpoint image-generation --json
+focalapi models get seedream-4-5-251128
+focalapi models get dreamina-seedance-2-0-260128 --json
 
 focalapi gen image "未来城市海报" -m <图像模型> --size 1024x1024 -o ./out
 focalapi gen image "产品主视觉" -m gpt-image-2 --size 1536x1024 --quality high --background opaque -o ./out
@@ -95,27 +96,49 @@ focalapi gen image "产品主视觉" -m gpt-image-2 --size 1024x1024 --no-wait -
 focalapi task status <task_id> --json
 
 # Gemini 图像模型是原生 Gemini 端点，不走 OpenAI 图像端点
-focalapi gen gemini-image "一只水彩风格的橘猫" -m gemini-3.1-flash-image-preview \
+focalapi gen gemini-image "一只水彩风格的橘猫" -m gemini-3.1-flash-image \
   --aspect-ratio 16:9 --image-size 2K -o ./out
 # Gemini native generationConfig fields can be passed through --config; named flags cover --image, --system, --seed, --thinking-level, --temperature, and --top-p. responseFormat.image and a single candidate are fixed.
 
 # 视频：默认等待完成并下载；异步编排用 --no-wait
 focalapi gen video "海浪拍打礁石" -m <视频模型> --seconds 5
-focalapi gen video "海浪拍打礁石" -m doubao-seedance-2-0-260128 \
+focalapi gen video "海浪拍打礁石" -m dreamina-seedance-2-0-260128 \
   --seconds 5 --resolution 720p --ratio 16:9 --generate-audio true --no-wait --json
-focalapi gen video "让海浪缓慢推进" -m doubao-seedance-2-0-260128 \
+focalapi gen video "让海浪缓慢推进" -m dreamina-seedance-2-0-260128 \
   --image https://example.com/frame.png --generate-audio false --watermark true \
   --return-last-frame true --callback-url https://example.com/callback \
   --execution-expires-after 7200 --safety-identifier customer-42 --priority 4 --no-wait --json
 # Ark-compatible content (text, image_url, video_url, audio_url with roles) is available unchanged through metadata.content:
-focalapi gen video "ignored when content is supplied" -m doubao-seedance-2-0-260128 \
+focalapi gen video "ignored when content is supplied" -m dreamina-seedance-2-0-260128 \
   --content '[{"type":"text","text":"A cinematic ocean wave."}]' --no-wait --json
 focalapi gen video "海浪拍打礁石" -m <视频模型> --no-wait --json   # 拿 task_id
 focalapi task status <task_id> --json
 focalapi task download <task_id> -o ./out
 ```
 
-`models get` 是生成前的权威检查入口：返回 `supported_endpoint_types`、`supported_params`，并在可用时提供官方文档链接。CLI 会在本地拒绝已知的不支持参数，例如 Seedream 4.5 的低于 3.69 MP 的尺寸、Seedance Fast/Mini 的 1080p、或 Seedance 的非 4–15 秒时长；不会把这些确定会失败的请求交给上游。同步图像生成时，等待进度输出到 stderr，因此 `--json` 的 stdout 始终保持为可解析 JSON。
+`models get` 是生成前的权威检查入口：返回 `supported_endpoint_types`、`supported_params`，并在可用时提供官方文档链接。CLI 会在本地拒绝已知的不支持参数，例如 Seedream 4.5 的低于 3.69 MP 的尺寸、Seedance Fast/Mini 的 1080p、Seedance 2.5 超过 30 秒或将 `--ratio` 误传给 Grok 视频；不会把这些确定会失败的请求交给上游。同步图像生成时，等待进度输出到 stderr，因此 `--json` 的 stdout 始终保持为可解析 JSON。
+
+### 当前模型的原生参数
+
+模型 ID 与能力由 `models get` 实时决定；以下是当前 CLI 已封装的常用组合：
+
+```shell
+# Seedream：档位、水印、输出格式和提示词优化
+focalapi gen image "未来城市夜景海报" -m seedream-5-0-260128 \
+  --size 3k --watermark false --output-format jpeg --optimize-prompt disabled -o ./out
+
+# Grok 图像：画面比例、档位与可复现种子
+focalapi gen image "电影感海岸线" -m grok-imagine-image-quality \
+  --aspect-ratio 16:9 --resolution 2k --seed 7 -o ./out
+
+# Seedance 2.5：最长 30 秒，不支持 priority
+focalapi gen video "产品旋转展示" -m dreamina-seedance-2-5-260628 \
+  --seconds 12 --resolution 720p --ratio 16:9 --no-wait --json
+
+# Grok 视频：使用 --aspect-ratio 和 --seed，不要使用 Seedance 的 --ratio
+focalapi gen video "航拍海岸线" -m grok-imagine-video-1.5 \
+  --seconds 6 --resolution 1080p --aspect-ratio 16:9 --seed 7 --no-wait --json
+```
 
 ### 音频创作
 
@@ -159,7 +182,7 @@ focalapi connect uninstall            # 按 manifest 精确卸载，不碰其他
 | 图片 / 视频生成 | `focalapi gen image / gen video` |
 | 任务查询与产物下载 | `focalapi task status / download`（图像任务使用 status 读取 `data[].url`） |
 | 语音转写 / 合成 | `focalapi audio transcribe / speech` |
-| 模型查询 | `focalapi models list / get` |
+| 模型查询 | `focalapi models list / search / get` |
 | 额度用量 | `focalapi usage` |
 | 诊断排障 | `focalapi doctor` |
 | Agent 接入 | `focalapi connect list / install / uninstall` |

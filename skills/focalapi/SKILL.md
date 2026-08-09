@@ -1,43 +1,33 @@
 ---
 name: focalapi
-description: focalapi 创作能力总入口。Use when 用户需要生成或处理图像、视频、音频、3D 或其他视觉创作内容；DeepSeek 仅用于提示词、分镜和轻量文本辅助。先读本技能选择对应的子技能或命令。
+description: 通过 focalapi CLI 选择并调用可用的创作模型。Use when 用户要生成或处理图片、视频、音频，或需要在调用前发现可用模型和参数。
 ---
 
-# focalapi 创作能力总览
+# focalapi 创作能力总入口
 
-focalapi 是面向创作工作流的模型中转服务。`focalapi` CLI 让 Agent 用命令完成图像、视频、音频与其他视觉创作任务；通用文本只将 DeepSeek 作为备用能力。
-
-## 前置检查
+先确认 CLI、认证和实时模型契约。不要猜测模型 ID、价格或参数边界。
 
 ```bash
-focalapi --version
 focalapi auth status
 focalapi models list --json
-# 选定创作模型后，读取支持参数、端点与默认值
-focalapi models get <模型ID> --json
+focalapi models search image --endpoint image-generation --json
+focalapi models get <model-id> --json
 ```
 
-模型、参数、并发和价格始终以 `focalapi models list --json` 与控制台模型广场的实际结果为准。命令失败时，先执行 `focalapi doctor` 排查 Key、网络与额度。
+`models get` 返回的 `supported_endpoint_types` 和 `supported_params` 是当前 Key 的权威契约。模型列表与详情不一致时，以详情报错为准，重新选择列表中可读取详情的模型。
 
-## 能力 → 命令速查
+| 需求 | 命令 | 进一步技能 |
+| --- | --- | --- |
+| 发现模型、端点和参数 | `focalapi models list/search/get` | focalapi-models |
+| 图片、Gemini 原生图片、视频 | `focalapi gen image/gemini-image/video` | focalapi-gen |
+| 查询或下载异步产物 | `focalapi task status/download` | focalapi-task |
+| 转写或语音合成 | `focalapi audio transcribe/speech` | focalapi-chat |
+| 提示词、分镜、轻量文本辅助 | `focalapi chat -m <DeepSeek-model>` | focalapi-chat |
+| 额度、账单或连通性故障 | `focalapi usage` / `focalapi doctor` | focalapi-usage |
 
-| 需求 | 命令 | 子技能 |
-|---|---|---|
-| 生成或编辑图像 | `focalapi gen image`（可 `--no-wait` 提交持久任务） | focalapi-gen |
-| 生成 Gemini 原生图像 | `focalapi gen gemini-image` | focalapi-gen |
-| 生成视频 | `focalapi gen video`（任务制，可 `--no-wait`） | focalapi-gen |
-| 查询任务或下载视频产物 | `focalapi task status` / `focalapi task download` | focalapi-gen |
-| 语音转文字 | `focalapi audio transcribe` | focalapi-chat |
-| 文字转语音 | `focalapi audio speech` | focalapi-chat |
-| 提示词、分镜或脚本辅助 | `focalapi chat -m <DeepSeek 模型>` | focalapi-chat |
-| 额度与诊断 | `focalapi usage` / `focalapi doctor` | focalapi-usage |
-| 查询可用模型 | `focalapi models list --json` | focalapi |
+规则：
 
-## 使用约定
-
-1. **创作优先**：图像、视频、音频和视觉模型是默认选择。3D 或其他视觉模型是否可用，以模型列表为准。
-2. **文本边界**：仅在提示词、分镜、旁白草稿或轻量文本任务中使用 DeepSeek；不要假设其他文本、编码或聊天模型可用。
-3. **机器可读输出**：命令加 `--json` 时，stdout 只输出 JSON。
-4. **先查模型再调用**：不能猜测模型 ID；先运行 `focalapi models list --json`，选定模型后运行 `focalapi models get <模型ID> --json`，以 `supported_endpoint_types` 和 `supported_params` 为准。
-5. **产物路径**：生成类命令默认写入 `./focalapi-out/`，完成后向用户报告绝对路径。
-6. **原始只读请求**：优先使用语义化命令；只有读取尚未封装的端点时才使用 `request get` / `request head`。
+1. 创建模型优先；DeepSeek 只用于提示词、分镜、旁白和轻量文本辅助。
+2. 所有自动化调用都加 `--json`；stdout 是机器可读 JSON，诊断信息走 stderr。
+3. 生成前确认额度；长任务先使用 `--no-wait`，再用 `focalapi task status <task-id> --json` 跟踪。
+4. 只读探索可用 `focalapi request get` 或 `request head`，不要把它当作写入 API 的绕过方式。

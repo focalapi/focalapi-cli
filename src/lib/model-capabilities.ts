@@ -16,6 +16,7 @@ export type SupportedParameter = {
 type ImageGenerationConstraint = {
   defaultSize: string;
   maxN: number;
+  sizeTiers?: string[];
   maxReferenceImages?: number;
   maxTotalImages?: number;
   minMegapixels?: number;
@@ -26,20 +27,35 @@ type ImageGenerationConstraint = {
   maxAspectRatio?: number;
   qualities?: string[];
   backgrounds?: string[];
+  aspectRatios?: string[];
+  resolutions?: string[];
+  supportsSeed?: boolean;
+  supportsWatermark?: boolean;
+  outputFormats?: string[];
+  optimizePromptModes?: string[];
 };
 
 type VideoGenerationConstraint = {
   resolutions: string[];
-  ratios: string[];
+  ratios?: string[];
+  aspectRatios?: string[];
   minSeconds: number;
   maxSeconds: number;
+  supportsPriority?: boolean;
+  supportsSeed?: boolean;
 };
 
 type GeminiImageConstraint = {
   aspectRatios: string[];
-  imageSizes: string[];
+  imageSizes?: string[];
   supportsSampling: boolean;
 };
+
+const SEEDREAM_OUTPUT_FORMATS = ['png', 'jpeg'];
+const SEEDREAM_OPTIMIZE_PROMPT_MODES = ['auto', 'enabled', 'disabled'];
+const GROK_IMAGE_ASPECT_RATIOS = [
+  'auto', '1:1', '2:3', '3:2', '3:4', '4:3', '9:16', '16:9', '9:19.5', '19.5:9', '1:2', '2:1', '1:3', '3:1',
+];
 
 const IMAGE_CONSTRAINTS: Record<string, ImageGenerationConstraint> = {
   'gpt-image-2': {
@@ -55,53 +71,93 @@ const IMAGE_CONSTRAINTS: Record<string, ImageGenerationConstraint> = {
     qualities: ['low', 'medium', 'high'],
     backgrounds: ['auto', 'opaque'],
   },
-  'doubao-seedream-4-5-251128': {
-    defaultSize: '2048x2048',
+  'seedream-4-0-250828': {
+    defaultSize: '1k',
+    sizeTiers: ['1k', '2k', '4k'],
+    maxN: 10,
+    maxReferenceImages: 10,
+    maxTotalImages: 15,
+    minMegapixels: 0.92,
+    maxMegapixels: 16.777216,
+    supportsWatermark: true,
+    outputFormats: SEEDREAM_OUTPUT_FORMATS,
+    optimizePromptModes: SEEDREAM_OPTIMIZE_PROMPT_MODES,
+  },
+  'seedream-4-5-251128': {
+    defaultSize: '2k',
+    sizeTiers: ['2k', '4k'],
     maxN: 10,
     maxReferenceImages: 10,
     maxTotalImages: 15,
     minMegapixels: 3.6864,
     maxMegapixels: 16.777216,
+    supportsWatermark: true,
+    outputFormats: SEEDREAM_OUTPUT_FORMATS,
+    optimizePromptModes: SEEDREAM_OPTIMIZE_PROMPT_MODES,
   },
-  'doubao-seedream-5-0-pro-260628': {
-    defaultSize: '1024x1024',
+  'dola-seedream-5-0-pro-260628': {
+    defaultSize: '1k',
+    sizeTiers: ['1k', '1.5k', '2k'],
     maxN: 1,
     maxReferenceImages: 10,
     minMegapixels: 0.92,
     maxMegapixels: 4.194304,
+    supportsWatermark: true,
+    outputFormats: SEEDREAM_OUTPUT_FORMATS,
+    optimizePromptModes: SEEDREAM_OPTIMIZE_PROMPT_MODES,
   },
-  'doubao-seedream-5-0-lite-260128': {
-    defaultSize: '2048x2048',
+  'seedream-5-0-260128': {
+    defaultSize: '2k',
+    sizeTiers: ['2k', '3k', '4k'],
     maxN: 14,
     maxReferenceImages: 14,
     maxTotalImages: 15,
     minMegapixels: 3.6864,
     maxMegapixels: 16.777216,
+    supportsWatermark: true,
+    outputFormats: SEEDREAM_OUTPUT_FORMATS,
+    optimizePromptModes: SEEDREAM_OPTIMIZE_PROMPT_MODES,
   },
-  'grok-imagine-image-quality': { defaultSize: '1024x1024', maxN: 10, maxReferenceImages: 3 },
-  'grok-imagine-image': { defaultSize: '1024x1024', maxN: 10, maxReferenceImages: 3 },
-  'grok-imagine-image-pro': { defaultSize: '1024x1024', maxN: 10, maxReferenceImages: 1 },
+  'grok-imagine-image-quality': {
+    defaultSize: '1024x1024', maxN: 10, maxReferenceImages: 3,
+    aspectRatios: GROK_IMAGE_ASPECT_RATIOS, resolutions: ['1k', '2k'], supportsSeed: true,
+  },
+  'grok-imagine-image': {
+    defaultSize: '1024x1024', maxN: 10, maxReferenceImages: 3,
+    aspectRatios: GROK_IMAGE_ASPECT_RATIOS, resolutions: ['1k', '2k'], supportsSeed: true,
+  },
 };
 
 const SEEDANCE_RATIOS = ['adaptive', '16:9', '4:3', '1:1', '3:4', '9:16', '21:9'];
+const GROK_VIDEO_ASPECT_RATIOS = ['auto', '16:9', '4:3', '3:2', '1:1', '2:3', '3:4', '9:16'];
 
 const VIDEO_CONSTRAINTS: Record<string, VideoGenerationConstraint> = {
-  'doubao-seedance-2-0-260128': {
-    resolutions: ['480p', '720p', '1080p', '4k'], ratios: SEEDANCE_RATIOS, minSeconds: 4, maxSeconds: 15,
+  'dreamina-seedance-2-0-260128': {
+    resolutions: ['480p', '720p', '1080p', '4k'], ratios: SEEDANCE_RATIOS, minSeconds: 4, maxSeconds: 15, supportsPriority: true,
   },
-  'doubao-seedance-2-0-fast-260128': {
-    resolutions: ['480p', '720p'], ratios: SEEDANCE_RATIOS, minSeconds: 4, maxSeconds: 15,
+  'dreamina-seedance-2-0-fast-260128': {
+    resolutions: ['480p', '720p'], ratios: SEEDANCE_RATIOS, minSeconds: 4, maxSeconds: 15, supportsPriority: true,
   },
-  'doubao-seedance-2-0-mini-260615': {
-    resolutions: ['480p', '720p'], ratios: SEEDANCE_RATIOS, minSeconds: 4, maxSeconds: 15,
+  'dreamina-seedance-2-0-mini-260615': {
+    resolutions: ['480p', '720p'], ratios: SEEDANCE_RATIOS, minSeconds: 4, maxSeconds: 15, supportsPriority: true,
+  },
+  'dreamina-seedance-2-5-260628': {
+    resolutions: ['480p', '720p'], ratios: SEEDANCE_RATIOS, minSeconds: 4, maxSeconds: 30,
+  },
+  'grok-imagine-video': {
+    resolutions: ['480p', '720p', '1080p'], aspectRatios: GROK_VIDEO_ASPECT_RATIOS, minSeconds: 1, maxSeconds: 15, supportsSeed: true,
+  },
+  'grok-imagine-video-1.5': {
+    resolutions: ['480p', '720p', '1080p'], aspectRatios: GROK_VIDEO_ASPECT_RATIOS, minSeconds: 1, maxSeconds: 15, supportsSeed: true,
   },
 };
 
 const COMMON_GEMINI_RATIOS = ['auto', '1:1', '2:3', '3:2', '3:4', '4:3', '4:5', '5:4', '9:16', '16:9', '21:9'];
 const GEMINI_IMAGE_CONSTRAINTS: Record<string, GeminiImageConstraint> = {
-  'gemini-3-pro-image-preview': { aspectRatios: COMMON_GEMINI_RATIOS, imageSizes: ['1K', '2K', '4K'], supportsSampling: false },
-  'gemini-3.1-flash-image-preview': { aspectRatios: COMMON_GEMINI_RATIOS, imageSizes: ['1K', '2K', '4K'], supportsSampling: false },
-  'gemini-3.1-flash-lite-image-preview': {
+  'gemini-2.5-flash-image': { aspectRatios: COMMON_GEMINI_RATIOS, supportsSampling: false },
+  'gemini-3-pro-image': { aspectRatios: COMMON_GEMINI_RATIOS, imageSizes: ['1K', '2K', '4K'], supportsSampling: false },
+  'gemini-3.1-flash-image': { aspectRatios: COMMON_GEMINI_RATIOS, imageSizes: ['1K', '2K', '4K'], supportsSampling: false },
+  'gemini-3.1-flash-lite-image': {
     aspectRatios: [...COMMON_GEMINI_RATIOS, '1:4', '4:1', '1:8', '8:1'], imageSizes: ['1K'], supportsSampling: true,
   },
 };
@@ -109,7 +165,7 @@ const GEMINI_IMAGE_CONSTRAINTS: Record<string, GeminiImageConstraint> = {
 function parseSize(size: string, model: string): { width: number; height: number } {
   const match = /^(\d+)x(\d+)$/i.exec(size.trim());
   if (!match) {
-    throw new ApiError('invalid_request', `${model} size must be WIDTHxHEIGHT (received: ${size})`);
+    throw new ApiError('invalid_request', `${model} size must be a supported tier or WIDTHxHEIGHT (received: ${size})`);
   }
   return { width: Number(match[1]), height: Number(match[2]) };
 }
@@ -122,9 +178,38 @@ function formatMegapixels(value: number): string {
   return value.toFixed(2).replace(/\.00$/, '');
 }
 
+function validateOptionalChoice(
+  model: string,
+  name: string,
+  value: string | undefined,
+  supported: string[] | undefined,
+): void {
+  if (!value) return;
+  if (!supported) {
+    throw new ApiError('invalid_request', `${model} does not support ${name}`);
+  }
+  if (!supported.includes(value.toLowerCase())) {
+    throw new ApiError('invalid_request', `${model} ${name} must be one of ${supported.join(', ')} (received: ${value})`);
+  }
+}
+
 export function validateImageGeneration(
   model: string,
-  input: { n: number; size?: string; quality?: string; background?: string; responseFormat?: string; imageCount?: number; hasMask?: boolean },
+  input: {
+    n: number;
+    size?: string;
+    quality?: string;
+    background?: string;
+    responseFormat?: string;
+    imageCount?: number;
+    hasMask?: boolean;
+    aspectRatio?: string;
+    resolution?: string;
+    seed?: number;
+    watermark?: boolean;
+    outputFormat?: string;
+    optimizePrompt?: string;
+  },
 ): void {
   if (input.responseFormat && input.responseFormat !== 'url' && input.responseFormat !== 'b64_json') {
     throw new ApiError('invalid_request', `response_format must be url or b64_json (received: ${input.responseFormat})`);
@@ -143,13 +228,30 @@ export function validateImageGeneration(
   if (input.hasMask && model === 'gpt-image-2' && input.imageCount !== 1) {
     throw new ApiError('invalid_request', 'gpt-image-2 mask requires exactly one reference image');
   }
-  if (input.quality && constraint.qualities && !constraint.qualities.includes(input.quality.toLowerCase())) {
-    throw new ApiError('invalid_request', `${model} quality must be one of ${constraint.qualities.join(', ')} (received: ${input.quality})`);
+  validateOptionalChoice(model, 'quality', input.quality, constraint.qualities);
+  validateOptionalChoice(model, 'background', input.background, constraint.backgrounds);
+  validateOptionalChoice(model, 'aspect_ratio', input.aspectRatio, constraint.aspectRatios);
+  validateOptionalChoice(model, 'resolution', input.resolution, constraint.resolutions);
+  validateOptionalChoice(model, 'output_format', input.outputFormat, constraint.outputFormats);
+  validateOptionalChoice(model, 'optimize_prompt', input.optimizePrompt, constraint.optimizePromptModes);
+  if (input.seed !== undefined) {
+    if (!constraint.supportsSeed) {
+      throw new ApiError('invalid_request', `${model} does not support seed`);
+    }
+    if (!Number.isInteger(input.seed) || input.seed < 0) {
+      throw new ApiError('invalid_request', 'seed must be a non-negative integer');
+    }
   }
-  if (input.background && constraint.backgrounds && !constraint.backgrounds.includes(input.background.toLowerCase())) {
-    throw new ApiError('invalid_request', `${model} background must be one of ${constraint.backgrounds.join(', ')} (received: ${input.background})`);
+  if (input.watermark !== undefined && !constraint.supportsWatermark) {
+    throw new ApiError('invalid_request', `${model} does not support watermark`);
   }
-  const { width, height } = parseSize(input.size ?? constraint.defaultSize, model);
+
+  const suppliedSize = input.size ?? constraint.defaultSize;
+  if (constraint.sizeTiers?.includes(suppliedSize.toLowerCase())) return;
+  if (constraint.sizeTiers && !/^\d+x\d+$/i.test(suppliedSize)) {
+    throw new ApiError('invalid_request', `${model} size must be one of ${constraint.sizeTiers.join(', ')} or WIDTHxHEIGHT (received: ${suppliedSize})`);
+  }
+  const { width, height } = parseSize(suppliedSize, model);
   const pixels = megapixels(width, height);
   if ((constraint.minEdge && (width < constraint.minEdge || height < constraint.minEdge)) ||
       (constraint.maxEdge && (width > constraint.maxEdge || height > constraint.maxEdge)) ||
@@ -179,14 +281,15 @@ export function validateGeminiImageGeneration(model: string, input: { aspectRati
   if (input.aspectRatio && !constraint.aspectRatios.includes(input.aspectRatio)) {
     throw new ApiError('invalid_request', `${model} aspectRatio must be one of ${constraint.aspectRatios.join(', ')} (received: ${input.aspectRatio})`);
   }
-  if (input.imageSize && !constraint.imageSizes.includes(input.imageSize.toUpperCase())) {
-    throw new ApiError('invalid_request', `${model} imageSize must be one of ${constraint.imageSizes.join(', ')} (received: ${input.imageSize})`);
+  if (input.imageSize && !constraint.imageSizes?.includes(input.imageSize.toUpperCase())) {
+    const supported = constraint.imageSizes?.join(', ') ?? 'none';
+    throw new ApiError('invalid_request', `${model} imageSize must be one of ${supported} (received: ${input.imageSize})`);
   }
   if (input.seed !== undefined && (!Number.isInteger(input.seed) || input.seed < 0)) {
     throw new ApiError('invalid_request', 'seed must be a non-negative integer');
   }
   if (!constraint.supportsSampling && (input.thinkingLevel || input.temperature !== undefined || input.topP !== undefined)) {
-    throw new ApiError('invalid_request', `${model} supports thinkingLevel, temperature, and topP only on gemini-3.1-flash-lite-image-preview`);
+    throw new ApiError('invalid_request', `${model} supports thinkingLevel, temperature, and topP only on gemini-3.1-flash-lite-image`);
   }
   if (input.thinkingLevel && !['MINIMAL', 'HIGH'].includes(input.thinkingLevel.toUpperCase())) {
     throw new ApiError('invalid_request', 'thinkingLevel must be MINIMAL or HIGH');
@@ -205,6 +308,8 @@ export function validateVideoGeneration(
     seconds?: number;
     resolution?: string;
     ratio?: string;
+    aspectRatio?: string;
+    seed?: number;
     serviceTier?: string;
     priority?: number;
     executionExpiresAfter?: number;
@@ -219,11 +324,32 @@ export function validateVideoGeneration(
   if (input.resolution && !constraint.resolutions.includes(input.resolution.toLowerCase())) {
     throw new ApiError('invalid_request', `${model} resolution must be one of ${constraint.resolutions.join(', ')} (received: ${input.resolution})`);
   }
-  if (input.ratio && !constraint.ratios.includes(input.ratio)) {
-    throw new ApiError('invalid_request', `${model} ratio must be one of ${constraint.ratios.join(', ')} (received: ${input.ratio})`);
+  if (input.ratio) {
+    if (!constraint.ratios) {
+      throw new ApiError('invalid_request', `${model} uses --aspect-ratio instead of --ratio`);
+    }
+    if (!constraint.ratios.includes(input.ratio)) {
+      throw new ApiError('invalid_request', `${model} ratio must be one of ${constraint.ratios.join(', ')} (received: ${input.ratio})`);
+    }
   }
-  if (input.priority !== undefined && model !== 'doubao-seedance-2-0-260128') {
-    throw new ApiError('invalid_request', `${model} does not support priority; only doubao-seedance-2-0-260128 does`);
+  if (input.aspectRatio) {
+    if (!constraint.aspectRatios) {
+      throw new ApiError('invalid_request', `${model} uses --ratio instead of --aspect-ratio`);
+    }
+    if (!constraint.aspectRatios.includes(input.aspectRatio)) {
+      throw new ApiError('invalid_request', `${model} aspect_ratio must be one of ${constraint.aspectRatios.join(', ')} (received: ${input.aspectRatio})`);
+    }
+  }
+  if (input.seed !== undefined) {
+    if (!constraint.supportsSeed) {
+      throw new ApiError('invalid_request', `${model} does not support seed`);
+    }
+    if (!Number.isInteger(input.seed) || input.seed < 0) {
+      throw new ApiError('invalid_request', 'seed must be a non-negative integer');
+    }
+  }
+  if (input.priority !== undefined && !constraint.supportsPriority) {
+    throw new ApiError('invalid_request', `${model} does not support priority`);
   }
   if (input.priority !== undefined && (input.priority < 0 || input.priority > 9)) {
     throw new ApiError('invalid_request', `${model} priority must be 0-9 (received: ${input.priority})`);

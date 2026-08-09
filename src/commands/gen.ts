@@ -155,15 +155,21 @@ export function registerGen(program: Command): void {
     .argument('<prompt...>', '提示词')
     .requiredOption('-m, --model <model>', '图像模型 ID（focalapi models list 查看）')
     .option('--size <size>', '尺寸，如 1024x1024')
+    .option('--aspect-ratio <ratio>', '原生画面比例（仅 Grok 图像模型），如 16:9')
+    .option('--resolution <resolution>', '原生输出档位（仅 Grok 图像模型），如 1k、2k')
+    .option('--seed <n>', '随机种子（仅 Grok 图像模型，非负整数）', (v) => Number.parseInt(v, 10))
     .option('--quality <quality>', '图像质量档位（仅支持该参数的模型生效）')
     .option('--background <background>', '背景模式（仅 gpt-image-2 支持 auto/opaque）')
+    .option('--watermark <boolean>', '是否添加水印（仅 Seedream，true 或 false）', (v) => parseBooleanOption(v, 'watermark'))
+    .option('--output-format <format>', '输出格式（仅 Seedream：png 或 jpeg）')
+    .option('--optimize-prompt <mode>', '提示词优化（仅 Seedream：auto、enabled 或 disabled）')
     .option('--image <url...>', '参考图或编辑图 URL，可多个')
     .option('--mask <url>', '编辑 mask URL（gpt-image-2 需要单张参考图）')
     .option('--response-format <format>', '图像响应格式：url 或 b64_json')
     .option('--n <count>', '张数（1–128）', (v) => Number.parseInt(v, 10), 1)
     .option('--no-wait', '提交后立即返回 task_id，不等待图像生成完成')
     .option('-o, --out <dir>', '输出目录', DEFAULT_OUT_DIR)
-    .action(async (promptParts: string[], opts: { model: string; size?: string; quality?: string; background?: string; image?: string[]; mask?: string; responseFormat?: string; n: number; wait?: boolean; out: string }, cmd: Command) => {
+    .action(async (promptParts: string[], opts: { model: string; size?: string; aspectRatio?: string; resolution?: string; seed?: number; quality?: string; background?: string; watermark?: boolean; outputFormat?: string; optimizePrompt?: string; image?: string[]; mask?: string; responseFormat?: string; n: number; wait?: boolean; out: string }, cmd: Command) => {
       const g = cmd.optsWithGlobals() as GlobalOpts;
       const auth = resolveAuth(g);
       const n = clampInt(opts.n, 1, MAX_IMAGE_N, 'n');
@@ -172,6 +178,12 @@ export function registerGen(program: Command): void {
         size: opts.size,
         quality: opts.quality,
         background: opts.background,
+        aspectRatio: opts.aspectRatio,
+        resolution: opts.resolution,
+        seed: opts.seed,
+        watermark: opts.watermark,
+        outputFormat: opts.outputFormat,
+        optimizePrompt: opts.optimizePrompt,
         responseFormat: opts.responseFormat,
         imageCount: opts.image?.length,
         hasMask: Boolean(opts.mask),
@@ -181,8 +193,14 @@ export function registerGen(program: Command): void {
       }
       const body: Record<string, unknown> = { model: opts.model, prompt: promptParts.join(' '), n };
       if (opts.size) body.size = opts.size;
+      if (opts.aspectRatio) body.aspect_ratio = opts.aspectRatio;
+      if (opts.resolution) body.resolution = opts.resolution.toLowerCase();
+      if (opts.seed !== undefined) body.seed = opts.seed;
       if (opts.quality) body.quality = opts.quality;
       if (opts.background) body.background = opts.background;
+      if (opts.watermark !== undefined) body.watermark = opts.watermark;
+      if (opts.outputFormat) body.output_format = opts.outputFormat.toLowerCase();
+      if (opts.optimizePrompt) body.optimize_prompt_options = { thinking: opts.optimizePrompt.toLowerCase() };
       if (opts.image) body.image = opts.image;
       if (opts.mask) body.mask = opts.mask;
       if (opts.responseFormat) body.response_format = opts.responseFormat;
@@ -307,15 +325,17 @@ export function registerGen(program: Command): void {
     .description('生成视频（任务制：默认轮询至完成并下载；--no-wait 只取 task_id）')
     .argument('<prompt...>', '提示词')
     .requiredOption('-m, --model <model>', '视频模型 ID（focalapi models list 查看）')
-    .option('--seconds <n>', '时长秒数（当前可用视频模型为 4–15；精确范围运行 focalapi models get <model> 查看）', (v) => Number.parseInt(v, 10))
+    .option('--seconds <n>', '时长秒数；精确范围运行 focalapi models get <model> 查看', (v) => Number.parseInt(v, 10))
     .option('--size <size>', '分辨率，如 1280x720')
     .option('--resolution <resolution>', '原生输出分辨率，如 480p、720p、1080p、4k')
     .option('--ratio <ratio>', '原生宽高比，如 16:9、9:16、adaptive')
+    .option('--aspect-ratio <ratio>', 'Grok 视频原生画面比例，如 16:9、9:16、auto')
+    .option('--seed <n>', 'Grok 视频随机种子（非负整数）', (v) => Number.parseInt(v, 10))
     .option('--image <url...>', '图生视频的源图像 URL，可多个')
     .option('--generate-audio <boolean>', '是否生成音频（只接受 true 或 false）', (v) => parseBooleanOption(v, 'generate-audio'))
     .option('--watermark <boolean>', '是否添加水印（只接受 true 或 false）', (v) => parseBooleanOption(v, 'watermark'))
     .option('--service-tier <tier>', '服务层级（Seedance 2.0 默认 default）')
-    .option('--priority <n>', '任务优先级（仅 Seedance 2.0 标准版）', (v) => Number.parseInt(v, 10))
+    .option('--priority <n>', '任务优先级（仅 Seedance 2.0 系列）', (v) => Number.parseInt(v, 10))
     .option('--callback-url <url>', '任务完成回调 URL')
     .option('--return-last-frame <boolean>', '是否返回最后一帧（只接受 true 或 false）', (v) => parseBooleanOption(v, 'return-last-frame'))
     .option('--execution-expires-after <seconds>', '任务过期秒数（3600–259200）', (v) => Number.parseInt(v, 10))
@@ -329,7 +349,7 @@ export function registerGen(program: Command): void {
       async (
         promptParts: string[],
         opts: {
-          model: string; seconds?: number; size?: string; resolution?: string; ratio?: string; image?: string[]; content?: string;
+          model: string; seconds?: number; size?: string; resolution?: string; ratio?: string; aspectRatio?: string; seed?: number; image?: string[]; content?: string;
           generateAudio?: boolean; watermark?: boolean; serviceTier?: string; priority?: number; callbackUrl?: string;
           returnLastFrame?: boolean; executionExpiresAfter?: number; safetyIdentifier?: string;
           wait?: boolean; pollInterval: number; timeout: number; out: string;
@@ -349,6 +369,8 @@ export function registerGen(program: Command): void {
         if (opts.image) body.images = opts.image;
         if (opts.resolution) metadata.resolution = opts.resolution.toLowerCase();
         if (opts.ratio) metadata.ratio = opts.ratio;
+        if (opts.aspectRatio) metadata.ratio = opts.aspectRatio;
+        if (opts.seed !== undefined) metadata.seed = opts.seed;
         if (opts.generateAudio !== undefined) metadata.generate_audio = opts.generateAudio;
         if (opts.watermark !== undefined) metadata.watermark = opts.watermark;
         if (opts.serviceTier) metadata.service_tier = opts.serviceTier;
@@ -362,6 +384,8 @@ export function registerGen(program: Command): void {
           seconds: opts.seconds,
           resolution: opts.resolution,
           ratio: opts.ratio,
+          aspectRatio: opts.aspectRatio,
+          seed: opts.seed,
           serviceTier: opts.serviceTier,
           priority: opts.priority,
           executionExpiresAfter: opts.executionExpiresAfter,

@@ -69,20 +69,20 @@ describe('models', () => {
     vi.stubGlobal(
       'fetch',
       mockFetchRouter({
-        '/v1/models/doubao-seedream-4-5-251128': () => ({
-          id: 'doubao-seedream-4-5-251128',
+        '/v1/models/seedream-4-5-251128': () => ({
+          id: 'seedream-4-5-251128',
           object: 'model',
           owned_by: 'comfy-cloud',
           supported_endpoint_types: ['image-generation'],
           supported_params: [
             { name: 'prompt', type: 'string', required: true, description: 'Text prompt.' },
-            { name: 'size', type: 'string', default: '2048x2048', description: 'Output size.' },
+            { name: 'size', type: 'string', default: '2k', description: 'Output size.' },
             { name: 'n', type: 'integer', default: 1, minimum: 1, maximum: 10, description: 'Image count.' },
           ],
         }),
       }),
     );
-    expect(await main(argv('models', 'get', 'doubao-seedream-4-5-251128', '--json'))).toBe(0);
+    expect(await main(argv('models', 'get', 'seedream-4-5-251128', '--json'))).toBe(0);
     const out = parseStdoutJson() as { supported_endpoint_types: string[]; supported_params: { name: string; minimum?: number; maximum?: number }[] };
     expect(out.supported_endpoint_types).toContain('image-generation');
     expect(out.supported_params.map((parameter) => parameter.name)).toEqual(expect.arrayContaining(['prompt', 'size', 'n']));
@@ -99,6 +99,30 @@ describe('models', () => {
     expect(await main(argv('models', 'get', 'model-with-null'))).toBe(0);
     expect(ctx.stdout()).toContain('-');
     expect(ctx.stdout()).not.toContain('"null"');
+  });
+  it('search can filter the live list by keyword and endpoint type', async () => {
+    vi.stubGlobal(
+      'fetch',
+      mockFetchRouter({
+        '/v1/models': () => ({ data: [
+          { id: 'grok-imagine-image', supported_endpoint_types: ['image-generation'] },
+          { id: 'grok-imagine-video', supported_endpoint_types: ['video-generation'] },
+        ] }),
+      }),
+    );
+    expect(await main(argv('models', 'search', 'grok', '--endpoint', 'video-generation', '--json'))).toBe(0);
+    const out = parseStdoutJson() as { data: { id: string }[] };
+    expect(out.data.map((model) => model.id)).toEqual(['grok-imagine-video']);
+  });
+
+  it('get turns an HTTP 200 model error envelope into a CLI error', async () => {
+    vi.stubGlobal(
+      'fetch',
+      mockFetchRouter({ '/v1/models/list-only-model': () => ({ error: { code: 'model_not_found', message: 'model unavailable' } }) }),
+    );
+    expect(await main(argv('models', 'get', 'list-only-model', '--json'))).toBe(1);
+    const out = parseStdoutJson() as { error: { code: string; message: string } };
+    expect(out.error).toMatchObject({ code: 'invalid_request', message: 'model unavailable' });
   });
 });
 
@@ -250,7 +274,7 @@ describe('gen image', () => {
   it('Seedream 4.5 的不支持尺寸在发送前拒绝，并说明像素范围', async () => {
     const spy = mockFetchRouter({});
     vi.stubGlobal('fetch', spy);
-    expect(await main(argv('gen', 'image', 'x', '-m', 'doubao-seedream-4-5-251128', '--size', '1024x1024', '--json'))).toBe(1);
+    expect(await main(argv('gen', 'image', 'x', '-m', 'seedream-4-5-251128', '--size', '1024x1024', '--json'))).toBe(1);
     expect(spy).not.toHaveBeenCalled();
     expect((parseStdoutJson() as { error: { message: string } }).error.message).toContain('3.69');
   });
@@ -261,20 +285,60 @@ describe('gen image', () => {
     vi.stubGlobal(
       'fetch',
       mockFetchRouter({
-        '/v1beta/models/gemini-3.1-flash-image-preview:generateContent': (init) => {
+        '/v1beta/models/gemini-3.1-flash-image:generateContent': (init) => {
           capturedBody = JSON.parse(String(init?.body)) as Record<string, unknown>;
           return { candidates: [{ content: { parts: [{ inlineData: { mimeType: 'image/png', data: png } }] } }] };
         },
       }),
     );
     const outDir = join(ctx.homeDir, 'gemini-out');
-    expect(await main(argv('gen', 'gemini-image', '一只猫', '-m', 'gemini-3.1-flash-image-preview', '--aspect-ratio', '16:9', '--image-size', '2K', '--response-modalities', 'IMAGE', '-o', outDir, '--json'))).toBe(0);
+    expect(await main(argv('gen', 'gemini-image', '一只猫', '-m', 'gemini-3.1-flash-image', '--aspect-ratio', '16:9', '--image-size', '2K', '--response-modalities', 'IMAGE', '-o', outDir, '--json'))).toBe(0);
     expect(capturedBody).toMatchObject({
       contents: [{ role: 'user', parts: [{ text: '一只猫' }] }],
       generationConfig: { candidateCount: 1, responseModalities: ['IMAGE'], responseFormat: { image: { aspectRatio: '16:9', imageSize: '2K' } } },
     });
     const out = parseStdoutJson() as { files: string[] };
     expect(readFileSync(out.files[0]!).toString()).toBe('gemini-png-bytes');
+  });
+  it('sends documented Seedream watermark, format, and prompt optimization fields', async () => {
+    const png = Buffer.from('fake-png-bytes').toString('base64');
+    let capturedBody: Record<string, unknown> | undefined;
+    vi.stubGlobal(
+      'fetch',
+      mockFetchRouter({
+        '/v1/images/generations': (init) => {
+          capturedBody = JSON.parse(String(init?.body)) as Record<string, unknown>;
+          return { created: 1, data: [{ b64_json: png }] };
+        },
+      }),
+    );
+    const outDir = join(ctx.homeDir, 'seedream-options-out');
+    expect(await main(argv(
+      'gen', 'image', 'x', '-m', 'seedream-5-0-260128', '--size', '3k', '--watermark', 'false',
+      '--output-format', 'jpeg', '--optimize-prompt', 'disabled', '-o', outDir, '--json',
+    ))).toBe(0);
+    expect(capturedBody).toMatchObject({
+      size: '3k', watermark: false, output_format: 'jpeg', optimize_prompt_options: { thinking: 'disabled' },
+    });
+  });
+
+  it('sends Grok image aspect ratio, resolution, and seed as native fields', async () => {
+    const png = Buffer.from('fake-png-bytes').toString('base64');
+    let capturedBody: Record<string, unknown> | undefined;
+    vi.stubGlobal(
+      'fetch',
+      mockFetchRouter({
+        '/v1/images/generations': (init) => {
+          capturedBody = JSON.parse(String(init?.body)) as Record<string, unknown>;
+          return { created: 1, data: [{ b64_json: png }] };
+        },
+      }),
+    );
+    const outDir = join(ctx.homeDir, 'grok-image-options-out');
+    expect(await main(argv(
+      'gen', 'image', 'x', '-m', 'grok-imagine-image-quality', '--aspect-ratio', '16:9', '--resolution', '2k', '--seed', '7', '-o', outDir, '--json',
+    ))).toBe(0);
+    expect(capturedBody).toMatchObject({ aspect_ratio: '16:9', resolution: '2k', seed: 7 });
   });
 });
 
@@ -285,7 +349,7 @@ describe('gen gemini-image documented fields', () => {
     vi.stubGlobal(
       'fetch',
       mockFetchRouter({
-        '/v1beta/models/gemini-3.1-flash-lite-image-preview:generateContent': (init) => {
+        '/v1beta/models/gemini-3.1-flash-lite-image:generateContent': (init) => {
           capturedBody = JSON.parse(String(init?.body)) as Record<string, unknown>;
           return { candidates: [{ content: { parts: [{ inlineData: { mimeType: 'image/png', data: png } }] } }] };
         },
@@ -294,7 +358,7 @@ describe('gen gemini-image documented fields', () => {
 
     const outDir = join(ctx.homeDir, 'gemini-fields-out');
     expect(await main(argv(
-      'gen', 'gemini-image', 'draw it', '-m', 'gemini-3.1-flash-lite-image-preview',
+      'gen', 'gemini-image', 'draw it', '-m', 'gemini-3.1-flash-lite-image',
       '--image', 'data:image/png;base64,ZmFrZQ==', '--system', 'Be concise.', '--seed', '7',
       '--thinking-level', 'HIGH', '--temperature', '1.2', '--top-p', '0.8', '-o', outDir, '--json',
     ))).toBe(0);
@@ -364,18 +428,18 @@ describe('gen video + task', () => {
         },
       }),
     );
-    expect(await main(argv('gen', 'video', '海浪', '-m', 'doubao-seedance-2-0-260128', '--seconds', '5', '--resolution', '720p', '--ratio', '16:9', '--generate-audio', 'true', '--no-wait', '--json'))).toBe(0);
+    expect(await main(argv('gen', 'video', '海浪', '-m', 'dreamina-seedance-2-0-260128', '--seconds', '5', '--resolution', '720p', '--ratio', '16:9', '--generate-audio', 'true', '--no-wait', '--json'))).toBe(0);
     expect(capturedBody?.duration).toBe(5);
     expect(capturedBody?.metadata).toMatchObject({ resolution: '720p', ratio: '16:9', generate_audio: true });
 
     const spy = mockFetchRouter({});
     vi.stubGlobal('fetch', spy);
-    expect(await main(argv('gen', 'video', 'x', '-m', 'doubao-seedance-2-0-fast-260128', '--resolution', '1080p', '--no-wait', '--json'))).toBe(1);
+    expect(await main(argv('gen', 'video', 'x', '-m', 'dreamina-seedance-2-0-fast-260128', '--resolution', '1080p', '--no-wait', '--json'))).toBe(1);
     expect(spy).not.toHaveBeenCalled();
 
-    expect(await main(argv('gen', 'video', 'x', '-m', 'doubao-seedance-2-0-260128', '--priority', '10', '--no-wait', '--json'))).toBe(1);
+    expect(await main(argv('gen', 'video', 'x', '-m', 'dreamina-seedance-2-0-260128', '--priority', '10', '--no-wait', '--json'))).toBe(1);
     expect(spy).not.toHaveBeenCalled();
-    expect(await main(argv('gen', 'video', 'x', '-m', 'doubao-seedance-2-0-260128', '--service-tier', 'priority', '--no-wait', '--json'))).toBe(1);
+    expect(await main(argv('gen', 'video', 'x', '-m', 'dreamina-seedance-2-0-260128', '--service-tier', 'priority', '--no-wait', '--json'))).toBe(1);
     expect(spy).not.toHaveBeenCalled();
   });
 
@@ -392,7 +456,7 @@ describe('gen video + task', () => {
     );
 
     expect(await main(argv(
-      'gen', 'video', '海浪', '-m', 'doubao-seedance-2-0-260128', '--image', 'https://example.com/frame.png',
+      'gen', 'video', '海浪', '-m', 'dreamina-seedance-2-0-260128', '--image', 'https://example.com/frame.png',
       '--generate-audio', 'false', '--watermark', 'true', '--return-last-frame', 'true',
       '--callback-url', 'https://example.com/callback', '--execution-expires-after', '7200',
       '--safety-identifier', 'customer-42', '--priority', '4', '--no-wait', '--json',
@@ -409,6 +473,30 @@ describe('gen video + task', () => {
         priority: 4,
       },
     });
+  });
+  it('uses aspect-ratio and seed for Grok video, and accepts 30 seconds for Seedance 2.5', async () => {
+    let capturedBody: Record<string, unknown> | undefined;
+    vi.stubGlobal(
+      'fetch',
+      mockFetchRouter({
+        '/v1/video/generations': (init) => {
+          capturedBody = JSON.parse(String(init?.body)) as Record<string, unknown>;
+          return { task_id: 'grok-video', status: 'submitted' };
+        },
+      }),
+    );
+    expect(await main(argv(
+      'gen', 'video', 'x', '-m', 'grok-imagine-video-1.5', '--seconds', '6', '--resolution', '1080p',
+      '--aspect-ratio', '16:9', '--seed', '7', '--no-wait', '--json',
+    ))).toBe(0);
+    expect(capturedBody).toMatchObject({ duration: 6, metadata: { resolution: '1080p', ratio: '16:9', seed: 7 } });
+
+    vi.stubGlobal('fetch', mockFetchRouter({ '/v1/video/generations': () => ({ task_id: 'seedance-25', status: 'submitted' }) }));
+    expect(await main(argv('gen', 'video', 'x', '-m', 'dreamina-seedance-2-5-260628', '--seconds', '30', '--no-wait', '--json'))).toBe(0);
+    const spy = mockFetchRouter({});
+    vi.stubGlobal('fetch', spy);
+    expect(await main(argv('gen', 'video', 'x', '-m', 'dreamina-seedance-2-5-260628', '--seconds', '31', '--no-wait', '--json'))).toBe(1);
+    expect(spy).not.toHaveBeenCalled();
   });
 });
 
@@ -427,7 +515,7 @@ describe('gen video metadata content', () => {
 
     const content = JSON.stringify([{ type: 'text', text: 'Use this exact prompt.' }]);
     expect(await main(argv(
-      'gen', 'video', 'ignored facade prompt', '-m', 'doubao-seedance-2-0-260128',
+      'gen', 'video', 'ignored facade prompt', '-m', 'dreamina-seedance-2-0-260128',
       '--content', content, '--no-wait', '--json',
     ))).toBe(0);
     expect(capturedBody?.metadata).toMatchObject({ content: [{ type: 'text', text: 'Use this exact prompt.' }] });
