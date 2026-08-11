@@ -8,6 +8,7 @@ import { ApiError } from '../lib/errors.js';
 import { request } from '../lib/http.js';
 import { printJson, printTable } from '../lib/output.js';
 import type { SupportedParameter } from '../lib/model-capabilities.js';
+import { parseCreativeCapability, resolveCreativeModel } from '../lib/model-selection.js';
 import type { GlobalOpts } from '../cli.js';
 
 export interface ModelEntry {
@@ -91,6 +92,40 @@ async function fetchModels(g: GlobalOpts): Promise<ModelEntry[]> {
 
 export function registerModels(program: Command): void {
   const models = program.command('models').description('可用模型查询');
+
+  models
+    .command('resolve')
+    .description('为创作任务选择当前 Key 可用的默认模型，并返回完整实时契约')
+    .argument('<capability>', '创作能力：image | video')
+    .action(async (capability: string, _opts: unknown, cmd: Command) => {
+      const g = cmd.optsWithGlobals() as GlobalOpts;
+      const auth = resolveAuth(g);
+      const resolved = await resolveCreativeModel(auth, parseCreativeCapability(capability));
+      if (g.json) {
+        printJson(resolved);
+        return;
+      }
+      printTable(
+        ['字段', '值'],
+        [
+          ['能力', resolved.capability],
+          ['模型', resolved.model.id],
+          ['提供方', resolved.model.owned_by ?? '-'],
+          ['端点', resolved.endpoint_type],
+          ['下一步', resolved.next_command],
+        ],
+      );
+      if (Array.isArray(resolved.model.supported_params) && resolved.model.supported_params.length > 0) {
+        process.stdout.write('\n实时参数契约\n');
+        printTable(
+          ['参数', '约束'],
+          resolved.model.supported_params.map((parameter) => {
+            const item = parameter as SupportedParameter;
+            return [item.name, parameterConstraint(item)];
+          }),
+        );
+      }
+    });
 
   models
     .command('list')

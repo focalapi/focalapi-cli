@@ -16,6 +16,7 @@ import { ApiError } from '../lib/errors.js';
 import { resolveAuth } from '../lib/config.js';
 import { request } from '../lib/http.js';
 import { validateGeminiImageGeneration, validateImageGeneration, validateVideoGeneration } from '../lib/model-capabilities.js';
+import { resolveCreativeModel } from '../lib/model-selection.js';
 import { downloadTaskContent, extractTaskId, pollTask } from '../lib/tasks.js';
 import { info, printJson } from '../lib/output.js';
 import type { GlobalOpts } from '../cli.js';
@@ -182,9 +183,9 @@ export function registerGen(program: Command): void {
   const gen = program.command('gen').description('图像 / 视频生成');
 
   gen.command('image')
-    .description('生成图像（默认同步返回并下载；--no-wait 返回可轮询的任务 ID）')
+    .description('生成图像（省略 --model 时自动选择当前可用默认模型）')
     .argument('<prompt...>', '提示词')
-    .requiredOption('-m, --model <model>', '图像模型 ID（focalapi models list 查看）')
+    .option('-m, --model <model>', '图像模型 ID；省略时由 focalapi 自动选择')
     .option('--size <size>', '尺寸，如 1024x1024')
     .option('--aspect-ratio <ratio>', '原生画面比例（仅 Grok 图像模型），如 16:9')
     .option('--resolution <resolution>', '原生输出档位（仅 Grok 图像模型），如 1k、2k')
@@ -200,11 +201,13 @@ export function registerGen(program: Command): void {
     .option('--n <count>', '张数（1–128）', (v) => Number.parseInt(v, 10), 1)
     .option('--no-wait', '提交后立即返回 task_id，不等待图像生成完成')
     .option('-o, --out <dir>', '输出目录', DEFAULT_OUT_DIR)
-    .action(async (promptParts: string[], opts: { model: string; size?: string; aspectRatio?: string; resolution?: string; seed?: number; quality?: string; background?: string; watermark?: boolean; outputFormat?: string; optimizePrompt?: string; image?: string[]; mask?: string; responseFormat?: string; n: number; wait?: boolean; out: string }, cmd: Command) => {
+    .action(async (promptParts: string[], opts: { model?: string; size?: string; aspectRatio?: string; resolution?: string; seed?: number; quality?: string; background?: string; watermark?: boolean; outputFormat?: string; optimizePrompt?: string; image?: string[]; mask?: string; responseFormat?: string; n: number; wait?: boolean; out: string }, cmd: Command) => {
       const g = cmd.optsWithGlobals() as GlobalOpts;
       const auth = resolveAuth(g);
+      const model = opts.model ?? (await resolveCreativeModel(auth, 'image')).model.id;
+      if (!opts.model && !g.json) info(`已自动选择图像模型：${model}`);
       const n = clampInt(opts.n, 1, MAX_IMAGE_N, 'n');
-      validateImageGeneration(opts.model, {
+      validateImageGeneration(model, {
         n,
         size: opts.size,
         quality: opts.quality,
@@ -222,7 +225,7 @@ export function registerGen(program: Command): void {
       if (opts.wait === false && opts.responseFormat === 'b64_json') {
         throw new ApiError('invalid_request', '--response-format b64_json cannot be used with --no-wait; use url');
       }
-      const body: Record<string, unknown> = { model: opts.model, prompt: promptParts.join(' '), n };
+      const body: Record<string, unknown> = { model, prompt: promptParts.join(' '), n };
       if (opts.size) body.size = opts.size;
       if (opts.aspectRatio) body.aspect_ratio = opts.aspectRatio;
       if (opts.resolution) body.resolution = opts.resolution.toLowerCase();
@@ -250,7 +253,7 @@ export function registerGen(program: Command): void {
           throw new ApiError('bad_response', '异步图像任务响应中未找到 task_id', { body: res });
         }
         if (g.json) {
-          printJson({ task_id: taskId, status: res.status ?? 'queued', submitted: true });
+          printJson({ model, task_id: taskId, status: res.status ?? 'queued', submitted: true, next_command: `focalapi task status ${taskId} --json` });
         } else {
           process.stdout.write(taskId + '\n');
           info(`任务已提交。查询：focalapi task status ${taskId}`);
@@ -269,7 +272,7 @@ export function registerGen(program: Command): void {
         files.push(await saveImageItem(item, dir, `image-${ts}-${i + 1}`, auth.apiKey));
       }
       if (g.json) {
-        printJson({ files, count: files.length });
+        printJson({ model, files, count: files.length });
       } else {
         for (const f of files) info(`✓ ${f}`);
       }
@@ -410,9 +413,9 @@ export function registerGen(program: Command): void {
     });
 
   gen.command('video')
-    .description('生成视频（任务制：默认轮询至完成并下载；--no-wait 只取 task_id）')
+    .description('生成视频（省略 --model 时自动选择当前可用默认模型）')
     .argument('<prompt...>', '提示词')
-    .requiredOption('-m, --model <model>', '视频模型 ID（focalapi models list 查看）')
+    .option('-m, --model <model>', '视频模型 ID；省略时由 focalapi 自动选择')
     .option('--seconds <n>', '时长秒数；精确范围运行 focalapi models get <model> 查看', (v) => Number.parseInt(v, 10))
     .option('--size <size>', '分辨率，如 1280x720')
     .option('--resolution <resolution>', '原生输出分辨率，如 480p、720p、1080p、4k')
@@ -437,7 +440,7 @@ export function registerGen(program: Command): void {
       async (
         promptParts: string[],
         opts: {
-          model: string; seconds?: number; size?: string; resolution?: string; ratio?: string; aspectRatio?: string; seed?: number; image?: string[]; content?: string;
+          model?: string; seconds?: number; size?: string; resolution?: string; ratio?: string; aspectRatio?: string; seed?: number; image?: string[]; content?: string;
           generateAudio?: boolean; watermark?: boolean; serviceTier?: string; priority?: number; callbackUrl?: string;
           returnLastFrame?: boolean; executionExpiresAfter?: number; safetyIdentifier?: string;
           wait?: boolean; pollInterval: number; timeout: number; out: string;
@@ -446,7 +449,9 @@ export function registerGen(program: Command): void {
       ) => {
         const g = cmd.optsWithGlobals() as GlobalOpts;
         const auth = resolveAuth(g);
-        const body: Record<string, unknown> = { model: opts.model, prompt: promptParts.join(' ') };
+        const model = opts.model ?? (await resolveCreativeModel(auth, 'video')).model.id;
+        if (!opts.model && !g.json) info(`已自动选择视频模型：${model}`);
+        const body: Record<string, unknown> = { model, prompt: promptParts.join(' ') };
         const metadata: Record<string, unknown> = {};
         if (opts.seconds !== undefined) {
           // focalapi 任务 DTO 的 seconds 是字符串类型（对齐 Kling/Seedance 上游格式）
@@ -468,7 +473,7 @@ export function registerGen(program: Command): void {
         if (opts.executionExpiresAfter !== undefined) metadata.execution_expires_after = opts.executionExpiresAfter;
         if (opts.safetyIdentifier) metadata.safety_identifier = opts.safetyIdentifier;
         if (opts.content) metadata.content = parseJsonArray(opts.content, 'content');
-        validateVideoGeneration(opts.model, {
+        validateVideoGeneration(model, {
           seconds: opts.seconds,
           resolution: opts.resolution,
           ratio: opts.ratio,
@@ -495,7 +500,7 @@ export function registerGen(program: Command): void {
 
         if (opts.wait === false) {
           if (g.json) {
-            printJson({ task_id: taskId, submitted: true });
+            printJson({ model, task_id: taskId, submitted: true, next_command: `focalapi task status ${taskId} --json` });
           } else {
             process.stdout.write(taskId + '\n');
             info(`任务已提交。续取：focalapi task status ${taskId} / focalapi task download ${taskId}`);
@@ -515,7 +520,7 @@ export function registerGen(program: Command): void {
         });
         const filePath = await downloadTaskContent(auth.baseUrl, auth.apiKey, taskId, opts.out);
         if (g.json) {
-          printJson({ task_id: taskId, status: final.status, file: filePath });
+          printJson({ model, task_id: taskId, status: final.status, file: filePath });
         } else {
           info(`✓ ${filePath}`);
         }

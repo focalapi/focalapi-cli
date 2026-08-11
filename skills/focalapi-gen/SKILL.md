@@ -1,77 +1,53 @@
 ---
 name: focalapi-gen
-description: 用 focalapi 生成图片、Gemini 原生图片或视频，并跟踪或下载异步产物。Use when 用户要画图、图生图、生成视频，或查询/下载生成任务。
+version: 2.0.0
+description: "用 focalapi 完成图片/视频生成、图片编辑、图生视频和参考素材创作。当用户表达画图、生图、改图、生成视频或让素材动起来时直接触发，即使未提 focalapi；默认自动选模，不先试模型。"
+metadata:
+  requires:
+    bins: ["focalapi"]
+  cliHelp: "focalapi gen --help"
 ---
 
 # focalapi 图片与视频生成
 
-先选模型、再读实时契约；不要复用过期模型名或参数。
+## 默认：自动选模，一次执行
+
+用户没有指定模型时，直接运行：
 
 ```bash
-focalapi models search image --endpoint image-generation --json
-focalapi models search video --endpoint video-generation --json
+focalapi gen image "<完整提示词>" -o ./focalapi-out --json
+focalapi gen video "<完整提示词>" --no-wait -o ./focalapi-out --json
+```
+
+CLI 会用当前 Key 的实时模型池与详情契约选择默认模型。不要先用低成本模型、
+测试提示词或多个模型各生成一次；这会产生不必要的费用和歧义。
+
+## 指定模型或高级参数
+
+用户点名模型时，先读一次实时契约：
+
+```bash
 focalapi models get <model-id> --json
+focalapi gen image "<prompt>" -m <model-id> [契约允许的参数] -o ./focalapi-out --json
+focalapi gen video "<prompt>" -m <model-id> [契约允许的参数] --no-wait -o ./focalapi-out --json
 ```
 
-## 图片
+- 图片编辑/参考图使用 `--image <url...>`；mask 仅在契约列出时传 `--mask`。
+- 视频参考图使用 `--image <url...>`；时长、清晰度、画面比例和音频开关只按
+  `supported_params` 传递。
+- 不把一个模型的 `ratio`、`aspect_ratio`、`size` 或 `resolution` 复制给另一模型。
+- Gemini 原生图片仅在用户明确选中对应模型时使用 `gen gemini-image`；普通任务
+  继续使用自动入口 `gen image`。
+
+## 结果闭环
+
+图片同步结果的 `files` 是本地绝对路径，直接交付用户。异步结果按返回的
+`next_command` 执行：
 
 ```bash
-# OpenAI 图片
-focalapi gen image "产品主视觉，工作室柔光" -m gpt-image-2 \
-  --size 1536x1024 --quality high --background opaque -o ./out
-
-# Seedream：size 可使用模型允许的档位；水印、格式和提示词优化为原生字段
-focalapi gen image "未来城市夜景海报" -m seedream-5-0-260128 \
-  --size 3k --watermark false --output-format jpeg --optimize-prompt disabled -o ./out
-
-# Grok 图像：使用 aspect-ratio、resolution 和 seed，不要改写成 Seedream 参数
-focalapi gen image "电影感海岸线" -m grok-imagine-image-quality \
-  --aspect-ratio 16:9 --resolution 2k --seed 7 -o ./out
-
-# Gemini 必须走原生 generateContent 命令
-focalapi gen gemini-image "水彩橘猫" -m gemini-3.1-flash-image \
-  --aspect-ratio 16:9 --image-size 2K -o ./out
+focalapi task status <task-id> --json
+focalapi task download <task-id> -o ./focalapi-out --json
 ```
 
-- 编辑图使用 `--image <url...>`；`gpt-image-2` 的 `--mask` 需要恰好一张参考图。
-- `gen image --no-wait --json` 返回 `task_id`；带 `--no-wait` 时不能用 `--response-format b64_json`。
-- Gemini Lite 的 `--thinking-level`、`--temperature`、`--top-p` 仅适用于 `gemini-3.1-flash-lite-image`。
-
-## 视频
-
-```bash
-# Seedance 2.0：ratio、resolution 和 priority
-focalapi gen video "海浪拍打礁石，电影感" -m dreamina-seedance-2-0-260128 \
-  --seconds 5 --resolution 720p --ratio 16:9 --priority 4 --no-wait --json
-
-# Seedance 2.5 最长 30 秒；不支持 priority
-focalapi gen video "产品旋转展示" -m dreamina-seedance-2-5-260628 \
-  --seconds 12 --resolution 720p --ratio 16:9 --no-wait --json
-
-# Grok 视频：使用 aspect-ratio 与 seed，不能传 --ratio
-focalapi gen video "航拍海岸线" -m grok-imagine-video-1.5 \
-  --seconds 6 --resolution 1080p --aspect-ratio 16:9 --seed 7 --no-wait --json
-```
-
-- Seedance 2.0 系列时长为 4–15 秒；2.5 为 4–30 秒；Grok 视频为 1–15 秒。实际可用范围以 `models get` 为准。
-- 视频默认轮询到完成并下载。编排长任务时用 `--no-wait --json`，然后执行 `focalapi task status <task-id> --json` 和 `focalapi task download <task-id> -o ./out`。
-- 使用 `--content <json>` 时，内容进入 `metadata.content`；仍需使用已验证的模型和参数。
-
-## Gemini Omni and Veo 3.1
-
-`gemini-omni-flash-preview` uses Gemini's native synchronous Interactions API,
-not the task endpoint. Use the dedicated command and pass reference images as
-base64 data URIs:
-
-```bash
-focalapi gen omni-video "A paper boat on a moonlit river" \
-  --image data:image/png;base64,... --aspect-ratio 9:16 \
-  --task image_to_video -o ./out --json
-```
-
-For Veo 3.1, continue to use `gen video` with the official model IDs:
-`veo-3.1-generate-preview`, `veo-3.1-fast-generate-preview`, and
-`veo-3.1-lite-generate-preview`. They support 4, 6, or 8 seconds and 16:9 or
-9:16. 1080p requires 8 seconds; 4k also requires 8 seconds and is unavailable
-on Lite. Check `focalapi models get <model-id> --json` before selecting a
-resolution.
+`pending` / `running` 不是失败；继续查询同一个 `task_id`，不得重新提交生成。
+失败时读取结构化 `error.code` 和 `hint`，只修复明确问题，不盲目换模型。

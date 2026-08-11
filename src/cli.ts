@@ -28,7 +28,7 @@ export function buildProgram(): Command {
   const program = new Command();
   program
     .name('focalapi')
-    .description('面向创作工作流的 focalapi CLI：图像、视频、音频与 DeepSeek 备用文本能力，一条命令直达')
+    .description('让 AI Agent 直接调用 focalapi 创作模型：自动选模、生成、任务续取与用量诊断')
     .version(VERSION, '-v, --version', '显示版本号')
     .option('--json', '以 JSON 输出（面向 Agent 与脚本，stdout 纯净）')
     .option('--base-url <url>', '覆盖 API 地址（默认 https://api.focalapi.com，可用 FOCALAPI_BASE_URL）')
@@ -51,10 +51,11 @@ export function buildProgram(): Command {
 }
 
 export async function main(argv: string[] = process.argv): Promise<number> {
+  process.exitCode = 0;
   const program = buildProgram();
   try {
     await program.parseAsync(argv);
-    return 0;
+    return typeof process.exitCode === 'number' ? process.exitCode : 0;
   } catch (err) {
     let json = false;
     try {

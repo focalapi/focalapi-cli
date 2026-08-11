@@ -124,6 +124,30 @@ describe('models', () => {
     const out = parseStdoutJson() as { error: { code: string; message: string } };
     expect(out.error).toMatchObject({ code: 'invalid_request', message: 'model unavailable' });
   });
+
+  it('resolve 按实时列表和详情契约选择默认创作模型，不靠名称猜端点', async () => {
+    vi.stubGlobal(
+      'fetch',
+      mockFetchRouter({
+        '/v1/models/dreamina-seedance-2-5-260628': () => ({
+          id: 'dreamina-seedance-2-5-260628',
+          owned_by: 'bytedance',
+          supported_endpoint_types: ['video-generation'],
+          supported_params: [{ name: 'duration', type: 'integer', minimum: 4, maximum: 30 }],
+        }),
+        '/v1/models': () => ({ data: [
+          // 列表摘要故意只有 openai；resolve 必须读取详情契约再确定模态。
+          { id: 'dreamina-seedance-2-5-260628', supported_endpoint_types: ['openai'] },
+          { id: 'veo-3.1-generate-preview', supported_endpoint_types: ['openai'] },
+        ] }),
+      }),
+    );
+    expect(await main(argv('models', 'resolve', 'video', '--json'))).toBe(0);
+    const out = parseStdoutJson() as { model: { id: string }; endpoint_type: string; next_command: string };
+    expect(out.model.id).toBe('dreamina-seedance-2-5-260628');
+    expect(out.endpoint_type).toBe('video-generation');
+    expect(out.next_command).toContain('focalapi gen video');
+  });
 });
 
 describe('request', () => {
@@ -204,6 +228,32 @@ describe('chat', () => {
 });
 
 describe('gen image', () => {
+  it('省略 --model 时自动选择实时可用默认模型并只生成一次', async () => {
+    const png = Buffer.from('auto-selected-image').toString('base64');
+    let capturedBody: Record<string, unknown> | undefined;
+    vi.stubGlobal(
+      'fetch',
+      mockFetchRouter({
+        '/v1/models/seedream-5-0-260128': () => ({
+          id: 'seedream-5-0-260128',
+          supported_endpoint_types: ['image-generation'],
+          supported_params: [{ name: 'prompt', type: 'string', required: true }],
+        }),
+        '/v1/models': () => ({ data: [{ id: 'seedream-5-0-260128', supported_endpoint_types: ['openai'] }] }),
+        '/v1/images/generations': (init) => {
+          capturedBody = JSON.parse(String(init?.body)) as Record<string, unknown>;
+          return { created: 1, data: [{ b64_json: png }] };
+        },
+      }),
+    );
+    const outDir = join(ctx.homeDir, 'auto-image-out');
+    expect(await main(argv('gen', 'image', '产品主视觉', '-o', outDir, '--json'))).toBe(0);
+    const out = parseStdoutJson() as { model: string; files: string[] };
+    expect(out.model).toBe('seedream-5-0-260128');
+    expect(capturedBody?.model).toBe('seedream-5-0-260128');
+    expect(out.files).toHaveLength(1);
+  });
+
   it('b64_json 结果落盘 + JSON 输出文件列表', async () => {
     const png = Buffer.from('fake-png-bytes').toString('base64');
     vi.stubGlobal(
@@ -418,6 +468,25 @@ describe('gen omni-video', () => {
 });
 
 describe('gen video + task', () => {
+  it('省略 --model 时自动选择 Seedance 默认模型并返回明确续取命令', async () => {
+    vi.stubGlobal(
+      'fetch',
+      mockFetchRouter({
+        '/v1/models/dreamina-seedance-2-5-260628': () => ({
+          id: 'dreamina-seedance-2-5-260628',
+          supported_endpoint_types: ['video-generation'],
+          supported_params: [{ name: 'duration', type: 'integer', minimum: 4, maximum: 30 }],
+        }),
+        '/v1/models': () => ({ data: [{ id: 'dreamina-seedance-2-5-260628', supported_endpoint_types: ['openai'] }] }),
+        '/v1/video/generations': () => ({ task_id: 'auto-video-1', status: 'submitted' }),
+      }),
+    );
+    expect(await main(argv('gen', 'video', '海浪', '--no-wait', '--json'))).toBe(0);
+    const out = parseStdoutJson() as { model: string; task_id: string; next_command: string };
+    expect(out).toMatchObject({ model: 'dreamina-seedance-2-5-260628', task_id: 'auto-video-1' });
+    expect(out.next_command).toBe('focalapi task status auto-video-1 --json');
+  });
+
   it('--no-wait 立即返回 task_id；task status 归一化状态', async () => {
     vi.stubGlobal(
       'fetch',
@@ -644,7 +713,7 @@ describe('doctor', () => {
   it('无 key 时报告失败项且退出码非零（不抛异常崩溃）', async () => {
     vi.stubGlobal('fetch', mockFetchRouter({}));
     // 不传 --key，无 env 无 config
-    expect(await main(['node', 'focalapi', 'doctor', '--json', '--base-url', BASE])).toBe(0);
+    expect(await main(['node', 'focalapi', 'doctor', '--json', '--base-url', BASE])).toBe(1);
     const out = parseStdoutJson() as { ok: boolean; checks: { ok: boolean }[] };
     expect(out.ok).toBe(false);
     expect(out.checks[0]!.ok).toBe(false);

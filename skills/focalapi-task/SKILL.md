@@ -1,19 +1,25 @@
 ---
 name: focalapi-task
-description: 跟踪 focalapi 图片或视频异步任务并下载完成产物。Use when 生成命令返回 task_id，或用户要求查询进度、失败原因和产物文件。
+version: 2.0.0
+description: "续取 focalapi 图片/视频异步任务并下载产物。当生成结果包含 task_id/next_command，或用户问进度、失败原因、结果文件时使用；必须复用原 task_id，不重复生成。"
+metadata:
+  requires:
+    bins: ["focalapi"]
+  cliHelp: "focalapi task --help"
 ---
 
-# focalapi 异步任务
+# focalapi 异步任务闭环
 
-长任务优先提交后返回，避免在一次会话中盲等。
+生成命令返回 `task_id` 后，以响应里的 `next_command` 为第一选择：
 
 ```bash
-focalapi gen image "..." -m <model-id> --no-wait --json
-focalapi gen video "..." -m <model-id> --no-wait --json
 focalapi task status <task-id> --json
-focalapi task download <task-id> -o ./out
+focalapi task download <task-id> -o ./focalapi-out --json
 ```
 
-- `task status --json` 的 `status` 为 `pending`、`running`、`success`、`failed` 或 `unknown`；失败时检查 `raw` 中的上游详情。
-- 只在状态为 `success` 后下载；把最终绝对路径交给用户或后续步骤。
-- 需要同步等待时，视频生成可使用 `--poll-interval` 和 `--timeout`；不要以轮询替代模型和参数预检。
+- `pending` / `running`：仍是同一个有效任务，稍后查询；不要重提生成请求。
+- `success`：执行 download，检查文件存在，并把绝对路径交给用户。
+- `failed`：展示上游错误摘要和 hint；只有参数/内容问题被明确指出时才重新生成。
+- `unknown`：保留原始响应并运行 `focalapi doctor --json`，不要伪造成功状态。
+
+轮询要有边界；用户没有要求阻塞等待时，汇报当前状态和 `task_id` 即可。

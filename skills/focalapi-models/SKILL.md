@@ -1,26 +1,49 @@
 ---
 name: focalapi-models
-description: 发现 focalapi 当前 Key 可用的模型、端点与参数契约。Use when 用户要找模型、确认模型参数、比较模型可用性，或模型调用报错。
+version: 2.0.0
+description: "focalapi 创作模型选择与实时参数契约。当用户未指定模型、点名厂商/模型、比较模型，或生成参数报错时使用；默认用 resolve 直接得到可调用模型，禁止靠模型名猜能力或逐个试。"
+metadata:
+  requires:
+    bins: ["focalapi"]
+  cliHelp: "focalapi models --help"
 ---
 
-# focalapi 模型发现与契约
+# focalapi 模型选择
 
-模型供给会变化；禁止根据记忆、旧文档或相似模型推断 ID、端点和参数。
+## 最短路径
+
+用户未指定模型时，不需要先列全量模型，也不需要 Agent 自己排序：
 
 ```bash
-focalapi models list --json
-focalapi models search <keyword> --endpoint <endpoint-type> --json
-focalapi models get <model-id> --json
+focalapi models resolve image --json
+focalapi models resolve video --json
 ```
 
-端点类型常用值：`image-generation`、`video-generation`、`chat-completion`。选择模型前确认：
+`resolve` 会读取当前 Key 的实时列表，再读取候选模型的详情契约，返回：
 
-1. 目标端点出现在 `supported_endpoint_types`。
-2. `supported_params` 覆盖所需的尺寸、时长、比例、参考图和异步能力。
-3. 默认值、枚举与范围适合本次任务和额度。
+- `model.id`：可直接传给生成命令的精确 ID；
+- `endpoint_type`：已由详情确认的生成端点；
+- `model.supported_params`：本次可用参数、默认值、枚举和范围；
+- `next_command`：无需猜测的下一条命令。
 
-命令失败时：
+如果调用 `focalapi gen image/video` 时省略 `--model`，CLI 内部执行同一选择逻辑。
 
-- `models get` 返回模型不可用：重新运行 `models list --json`，不要重试同一个 ID。
-- 认证、网络或额度不明：运行 `focalapi doctor --json`，再运行 `focalapi usage --json`。
-- 仅需检查尚未封装的只读端点：`focalapi request get <path> --json`；不得调用写方法。
+## 用户指定模型
+
+```bash
+focalapi models get <完整模型-id> --json
+```
+
+只有用户给的是不完整厂商/系列名时，才先做一次搜索：
+
+```bash
+focalapi models search <keyword> --json
+focalapi models get <选中的完整-id> --json
+```
+
+规则：
+
+1. `models get` 是端点和参数的最终权威；列表摘要可能只展示协议族，不能据此猜模态。
+2. 不逐个模型发生成请求做可用性测试；模型发现与详情查询是只读预检。
+3. 指定模型不可用时，把可用候选交给用户或回到 `models resolve`，不要偷偷换模型。
+4. 查询完成后回到用户原始生成任务，不要停在模型清单。

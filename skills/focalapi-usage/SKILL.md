@@ -1,36 +1,27 @@
 ---
 name: focalapi-usage
-description: 查询 focalapi 额度/用量/账单，以及用 doctor 做链路诊断。Use when 用户问余额、用量、花了多少、Key 什么时候过期，或任何 focalapi 调用失败需要排障。
+version: 2.0.0
+description: "查询 focalapi 额度、用量与账单，或诊断网络、鉴权和服务错误。当用户问消费/余额，或业务命令失败且需要按错误码闭环时使用；正常生成前不强制增加诊断步骤。"
+metadata:
+  requires:
+    bins: ["focalapi"]
+  cliHelp: "focalapi usage --help"
 ---
 
 # focalapi 用量与诊断
 
-## 额度与用量
-
 ```bash
-focalapi auth status            # Key 有效性 + 剩余额度 + 过期时间
-focalapi usage                  # 令牌额度 + 本周期账单用量
-focalapi usage --start 2026-08-01 --end 2026-08-05 --json
+focalapi usage --json
+focalapi auth status --json
+focalapi doctor --json
 ```
 
-额度字段说明：`total_granted` 总额度、`total_used` 已用、`total_available` 剩余、`unlimited_quota` 为 true 表示不限额。
+- 用户问额度、余额、用量或账单：运行 `usage`。
+- `missing_api_key` / `invalid_api_key`：转 focalapi-auth。
+- `insufficient_quota`：运行 `usage`，说明缺口，不自动充值。
+- `network_error` / `timeout` / 5xx：运行一次 `doctor`，按 checks[].hint 处理。
+- `invalid_request`：回到 `models get` 的实时参数契约；不要重复发送同一请求。
+- `upstream_auth_failed`：保留 request ID 并反馈服务方，不要让用户更换本站 Key。
 
-## 诊断（doctor）
-
-任何 focalapi 调用失败，第一步永远是：
-
-```bash
-focalapi doctor            # 人读报告
-focalapi doctor --json     # 机读报告（checks 数组，每项 ok/detail/hint）
-```
-
-检查链：Key 解析 → 网络与鉴权（GET /v1/models）→ 端到端推理（focal-rehearsal-chat 免费演练模型，不耗额度）→ 额度。
-
-- 全部 ✓：链路正常，问题在调用参数（对照命令 --help）。
-- 任一 ✗：按该项 hint 修复；退出码非零适合脚本判断。
-
-## 成本控制建议
-
-- 演示/联调一律用 `focal-rehearsal-chat`（免费）。
-- 生成类操作前先 `focalapi usage` 确认额度充足。
-- 视频是任务制计费，优先用 `--seconds` 显式控制时长。
+正常业务命令没有报错时不要先跑 doctor 或免费演练；Agent 应直接完成用户的创作
+目标，减少无关调用。

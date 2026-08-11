@@ -1,15 +1,17 @@
 {
   "name": "focalapi-cli",
-  "version": "0.1.1",
-  "description": "连接 focalapi 创作模型与 AI Agent 的命令行工具——图像、视频、音频与 DeepSeek 备用文本能力",
+  "version": "0.2.0",
+  "description": "让任意 AI Agent 直接调用 focalapi 创作模型的命令行工具",
   "type": "module",
   "bin": {
     "focalapi": "dist/cli.js"
   },
   "files": [
     "dist",
+    "scripts",
     "skills",
     "README.md",
+    "CHANGELOG.md",
     "LICENSE"
   ],
   "engines": {
@@ -21,6 +23,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
+    "postinstall": "node scripts/postinstall.cjs",
     "prepublishOnly": "npm run build && npm test"
   },
   "keywords": [

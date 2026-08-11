@@ -1,5 +1,5 @@
 /**
- * focalapi chat：DeepSeek 备用对话（/v1/chat/completions），支持流式与多模态 @file 输入。
+ * focalapi chat：补充文本能力（/v1/chat/completions），支持流式与多模态 @file 输入。
  */
 
 import { Command } from 'commander';
@@ -44,7 +44,7 @@ function extractText(content: unknown): string {
 export function registerChat(program: Command): void {
   program
     .command('chat')
-    .description('DeepSeek 备用对话与提示词辅助（/v1/chat/completions）')
+    .description('补充文本辅助（模型必须来自当前 Key 的实时列表）')
     .argument('[prompt...]', '提示词；省略且 stdin 为管道时从 stdin 读取')
     .option('-m, --model <model>', '模型 ID（或设 FOCALAPI_MODEL）')
     .option('--system <text>', 'system 提示词')
