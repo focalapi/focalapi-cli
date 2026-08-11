@@ -1,5 +1,5 @@
 /**
- * focalapi chat：补充文本能力（/v1/chat/completions），支持流式与多模态 @file 输入。
+ * focalapi chat: supplementary text capability through /v1/chat/completions with streaming and multimodal @file input.
  */
 
 import { Command } from 'commander';
@@ -98,7 +98,7 @@ export function registerChat(program: Command): void {
         const body: Record<string, unknown> = { model, messages };
         if (opts.maxTokens !== undefined) body.max_tokens = opts.maxTokens;
 
-        // 流式默认：TTY 且非 JSON 模式
+        // Stream by default for a TTY outside JSON mode.
         const stream = opts.stream ?? (isInteractive() && !g.json);
         body.stream = stream;
 
@@ -145,7 +145,7 @@ export function registerChat(program: Command): void {
         }
         process.stdout.write('\n');
         if (g.json) {
-          // --json + 显式 --stream：流结束后输出聚合结果
+          // With --json and explicit --stream, emit the aggregated result after the stream ends.
           printJson({ model, content: collected.join('') });
         }
       },

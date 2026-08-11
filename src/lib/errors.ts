@@ -1,19 +1,19 @@
 /**
- * focalapi-cli 错误模型。
+ * focalapi-cli error model.
  *
- * 所有面向用户/Agent 的错误统一为 ApiError：{ code, message, hint }。
- * code 稳定可机读，hint 告诉下一步怎么办（人读）。
+ * Every user- or Agent-facing error is normalized to ApiError: { code, message, hint }.
+ * code is stable and machine-readable; hint explains the next action for a human.
  */
 
 export class ApiError extends Error {
   readonly code: string;
   readonly status?: number;
   readonly hint?: string;
-  /** 上游返回的稳定错误代码或类型；不包含密钥等敏感请求信息。 */
+  /** Stable upstream error code or type, without sensitive request data such as keys. */
   readonly upstreamCode?: string;
-  /** 可用于向服务方关联日志的请求 ID。 */
+  /** Request ID that the service operator can use to correlate logs. */
   readonly requestId?: string;
-  /** 上游原始响应体（已截断），仅调试用途，打印前需脱敏。 */
+  /** Truncated raw upstream response for debugging only; redact it before printing. */
   readonly body?: unknown;
 
   constructor(
@@ -63,7 +63,7 @@ export const ERROR_HINTS: Record<string, string> = {
   upstream_auth_failed: '上游渠道鉴权失败，并不表示你的 FocalAPI Key 无效。先运行 focalapi auth status；若通过，请将请求 ID 提供给服务方排查渠道配置。',
 };
 
-/** 根据错误体里的关键字细化错误码（new-api 的错误体结构不统一，做宽容解析）。 */
+/** Refine an error code from response keywords while tolerating inconsistent new-api shapes. */
 export function refineErrorCode(status: number, message: string, opts?: { authFailureIsInvalidApiKey?: boolean }): string {
   const m = message.toLowerCase();
   if (m.includes('quota') || m.includes('额度') || m.includes('insufficient')) {

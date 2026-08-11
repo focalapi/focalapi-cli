@@ -1,5 +1,5 @@
 /**
- * focalapi update：检查 npm 上的最新版本并给出升级指引。
+ * focalapi update: check the latest npm version and print upgrade guidance.
  */
 
 import { Command } from 'commander';
@@ -10,7 +10,7 @@ import type { GlobalOpts } from '../cli.js';
 
 const REGISTRY_URL = 'https://registry.npmjs.org/focalapi-cli/latest';
 
-/** 简单的 x.y.z 版本比较：a>b 返回 1，a<b 返回 -1，相等 0。 */
+/** Compare x.y.z versions: return 1 when a>b, -1 when a<b, and 0 when equal. */
 export function compareVersions(a: string, b: string): number {
   const pa = a.split('.').map((x) => Number.parseInt(x, 10) || 0);
   const pb = b.split('.').map((x) => Number.parseInt(x, 10) || 0);

@@ -1,8 +1,8 @@
 /**
- * 配置存储：~/.focalapi/config.json（权限 600）。
+ * Configuration storage: ~/.focalapi/config.json with mode 600.
  *
- * 优先级：命令行 flag > 环境变量（FOCALAPI_API_KEY / FOCALAPI_BASE_URL）> 当前 profile > 默认值。
- * FOCALAPI_CONFIG_DIR 可覆盖配置目录（测试与沙箱场景使用）。
+ * Precedence: CLI flag > environment variable (FOCALAPI_API_KEY / FOCALAPI_BASE_URL) > current profile > default.
+ * FOCALAPI_CONFIG_DIR overrides the directory for tests and sandboxed environments.
  */
 
 import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
@@ -25,8 +25,8 @@ export interface CliConfig {
 export const DEFAULT_PROFILE = 'default';
 
 /**
- * 把 git-bash/MSYS 风格路径（/c/Users/...）规范化为 Windows 原生路径（C:\Users\...）。
- * Windows 的 Node 不识别 MSYS 路径；其他平台原样返回。
+ * Normalize Git Bash/MSYS paths such as /c/Users/... to native Windows paths such as C:\Users\....
+ * Node on Windows does not understand MSYS paths; return paths unchanged on other platforms.
  */
 export function normalizeHomePath(p: string): string {
   if (process.platform === 'win32') {
@@ -73,7 +73,7 @@ export function saveConfig(config: CliConfig): void {
   try {
     chmodSync(path, 0o600);
   } catch {
-    // Windows 上 chmod 可能无效，忽略。
+    // chmod may be ineffective on Windows; ignore failures.
   }
 }
 
@@ -104,7 +104,7 @@ export function clearProfile(name: string): CliConfig {
 export interface ResolvedAuth {
   apiKey: string;
   baseUrl: string;
-  /** key 来源，用于 doctor 诊断展示。 */
+  /** Key source displayed by doctor diagnostics. */
   keySource: 'flag' | 'env' | 'config';
 }
 

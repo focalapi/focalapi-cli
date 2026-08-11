@@ -1,8 +1,8 @@
 /**
- * 任务制能力（视频等）的公共逻辑：任务 ID 提取、状态归一化、轮询、产物下载。
+ * Shared task-based workflow logic for video and similar operations: ID extraction, status normalization, polling, and downloads.
  *
- * focalapi 的任务响应来自多个上游渠道（Comfy Cloud/Kling/Jimeng/...），字段存在差异，
- * 这里只做宽容解析：task_id / status / progress 取公共面，其余原样透传。
+ * FocalAPI task responses come from multiple upstreams such as Comfy Cloud, Kling, and Jimeng.
+ * Parse task_id, status, and progress permissively while preserving all other fields unchanged.
  */
 
 import { createWriteStream } from 'node:fs';
@@ -29,7 +29,7 @@ export function normalizeTaskStatus(raw: unknown): TaskStatus {
   return 'unknown';
 }
 
-/** 从任务响应体中提取 task id（兼容 task_id / id / taskId）。 */
+/** Extract a task ID from task_id, id, or taskId. */
 export function extractTaskId(body: unknown): string | undefined {
   if (!body || typeof body !== 'object') return undefined;
   const obj = body as Record<string, unknown>;
@@ -42,7 +42,7 @@ export function extractTaskId(body: unknown): string | undefined {
   return undefined;
 }
 
-/** 从任务响应体提取进度（0-100），没有则 undefined。 */
+/** Extract progress in the 0–100 range, or return undefined when absent. */
 export function extractProgress(body: unknown): number | undefined {
   if (!body || typeof body !== 'object') return undefined;
   const obj = body as Record<string, unknown>;
@@ -95,11 +95,11 @@ export async function fetchTask(baseUrl: string, apiKey: string, taskId: string)
 export interface PollOptions {
   intervalMs?: number;
   timeoutMs?: number;
-  /** 每次状态变化回调（进度展示用）。 */
+  /** Callback for each status change, used to render progress. */
   onUpdate?: (info: TaskInfo) => void;
 }
 
-/** 轮询任务直至成功/失败/超时。 */
+/** Poll a task until it succeeds, fails, or times out. */
 export async function pollTask(
   baseUrl: string,
   apiKey: string,
@@ -139,7 +139,7 @@ const EXT_BY_CONTENT_TYPE: Record<string, string> = {
   'audio/wav': '.wav',
 };
 
-/** 经内容代理下载任务产物（/v1/videos/:task_id/content，TokenAuth 可达）。返回文件绝对路径。 */
+/** Download a task artifact through the TokenAuth content proxy and return its absolute path. */
 export async function downloadTaskContent(
   baseUrl: string,
   apiKey: string,

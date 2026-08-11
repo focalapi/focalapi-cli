@@ -1,5 +1,5 @@
 /**
- * 文件输入工具：--input @file 的处理（读文件 → data URL / 文本）。
+ * File-input utilities for --input @file, including file-to-data-URL and text conversion.
  */
 
 import { readFileSync, statSync } from 'node:fs';
@@ -57,7 +57,7 @@ export function toDataUrl(file: InputFile): string {
   return `data:${file.mime};base64,${file.data.toString('base64')}`;
 }
 
-/** 读取 stdin 全部文本（用于管道喂 prompt）。 */
+/** Read all text from stdin for piped prompts. */
 export async function readStdin(): Promise<string> {
   const chunks: Buffer[] = [];
   for await (const chunk of process.stdin) {

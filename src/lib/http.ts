@@ -1,9 +1,9 @@
 /**
- * HTTP 层：focalapi REST 调用的唯一出口。
+ * HTTP layer and the only exit point for FocalAPI REST calls.
  *
- * - JSON 请求/响应、FormData 上传、二进制下载、SSE 流读取。
- * - 非 2xx 统一规范化为 ApiError（code 由 refineErrorCode 推断）。
- * - new-api 系错误体两种形态都兼容：{error:{message,type}} 与 {success:false,message}。
+ * - Supports JSON requests/responses, FormData uploads, binary downloads, and SSE streams.
+ * - Normalizes every non-2xx response to ApiError; refineErrorCode determines the code.
+ * - Accepts both new-api error shapes: {error:{message,type}} and {success:false,message}.
  */
 
 import { ApiError, refineErrorCode } from './errors.js';
@@ -14,14 +14,14 @@ export interface RequestOptions {
   method?: string;
   apiKey?: string;
   query?: Record<string, string | number | boolean | undefined>;
-  /** JSON 请求体。与 formData 互斥。 */
+  /** JSON request body. Mutually exclusive with formData. */
   body?: unknown;
-  /** multipart 表单。与 body 互斥。 */
+  /** Multipart form. Mutually exclusive with body. */
   formData?: FormData;
   headers?: Record<string, string>;
-  /** 默认 60s；视频生成等长任务调用方自行放大。 */
+  /** Defaults to 60 seconds; callers extend it for long-running work such as video generation. */
   timeoutMs?: number;
-  /** 仅本站 Token 校验端点可把 401/403 明确归因为本站 Key 无效。 */
+  /** Only FocalAPI token-validation endpoints may classify 401/403 as an invalid FocalAPI key. */
   authFailureIsInvalidApiKey?: boolean;
 }
 
@@ -37,7 +37,7 @@ function buildUrl(baseUrl: string, path: string, query?: RequestOptions['query']
   return url.toString();
 }
 
-/** 从响应体中提取错误消息，兼容 new-api 的多种错误结构。 */
+/** Extract an error message from any supported new-api response shape. */
 function extractErrorMessage(raw: string): { message: string; body?: unknown; upstreamCode?: string } {
   let parsed: unknown;
   try {
@@ -70,7 +70,7 @@ export async function request<T = unknown>(opts: RequestOptions): Promise<T> {
   }
 }
 
-/** 返回原始 Response（调用方负责消费 body），用于流式/二进制场景。错误同样规范化。 */
+/** Return the raw Response for streaming or binary consumers while preserving error normalization. */
 export async function rawRequest(opts: RequestOptions): Promise<Response> {
   const url = buildUrl(opts.baseUrl, opts.path, opts.query);
   const headers: Record<string, string> = { ...opts.headers };
@@ -116,8 +116,8 @@ export async function rawRequest(opts: RequestOptions): Promise<Response> {
 }
 
 /**
- * 逐条读取 SSE 流的 data 负载。
- * 遇到 `data: [DONE]` 时结束（不 yield）。调用方负责 JSON.parse。
+ * Read data payloads from an SSE stream one event at a time.
+ * Stop at `data: [DONE]` without yielding it. The caller is responsible for JSON.parse.
  */
 export async function* sseEvents(res: Response): AsyncGenerator<string> {
   if (!res.body) {
@@ -141,7 +141,7 @@ export async function* sseEvents(res: Response): AsyncGenerator<string> {
         if (data) yield data;
       }
     }
-    // 冲刷尾部：服务端可能省略结尾空行
+    // Flush the tail because a server may omit the final blank line.
     const tail = buffer.trim();
     if (tail.startsWith('data:')) {
       const data = tail.slice(5).trim();

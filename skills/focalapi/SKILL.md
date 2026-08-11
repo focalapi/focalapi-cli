@@ -1,54 +1,47 @@
 ---
 name: focalapi
 version: 2.0.0
-description: "focalapi 创作模型总入口。当用户要生成、编辑或处理创作内容，选择创作模型，或查询生成任务时，即使用户没有提到 focalapi，也应使用本技能；覆盖图片与视频的自动选模、生成、异步续取和故障分流。"
+description: "Primary router for FocalAPI creative models. Use when the user wants to generate, edit, or process creative media, choose a creative model, or inspect a generation task, even when the user does not mention FocalAPI. Covers automatic image and video model selection, generation, asynchronous continuation, and error routing."
 metadata:
   requires:
     bins: ["focalapi"]
   cliHelp: "focalapi --help"
 ---
 
-# focalapi 创作模型路由
+# FocalAPI creative-model routing
 
-focalapi 是供当前 Agent 调用的创作模型中转能力，不是 Agent 自身的
-model/provider。不要修改 Agent 的主模型配置，也不要要求用户先说“用 focalapi”。
+FocalAPI is a creative-model gateway for the current Agent to call. It is not the Agent's own model or provider. Do not change the Agent's primary model configuration or require the user to say “use FocalAPI” first.
 
-## 零试错执行契约
+## Zero-guesswork execution contract
 
-1. 用户未指定模型：直接省略 `--model`。CLI 会根据当前 Key 的实时模型池和
-   单模型详情契约选择 FocalAPI 默认模型；不要先生成测试样例。
-2. 用户指定模型或厂商：先运行 `focalapi models get <model-id> --json`；模型 ID
-   不完整时只运行一次 `models search` 找到精确 ID，再读取详情。
-3. 只使用详情 `supported_params` 中存在的参数和允许值；不得根据相似模型猜测。
-4. Agent/脚本调用统一加 `--json`。stdout 是唯一机读结果，诊断在 stderr。
-5. 生成成功后必须把本地绝对文件路径交给用户；视频任务返回 `task_id` 时沿
-   `next_command` 续取，不要重复提交一个新任务。
+1. If the user does not specify a model, omit `--model`. The CLI selects a FocalAPI default from the live model pool and detailed contracts available to the current key. Do not generate a test sample first.
+2. If the user specifies a model or provider, run `focalapi models get <model-id> --json` first. If the model ID is incomplete, run `models search` once to find the exact ID, then read its details.
+3. Use only parameters and values listed in the detailed `supported_params`. Never infer support from a similar model.
+4. Add `--json` for Agent and script calls. stdout is the only machine-readable result; diagnostics go to stderr.
+5. After successful generation, return local absolute file paths to the user. If a video response contains `task_id`, follow `next_command`; never submit the same task again.
 
 ```bash
-# 用户没指定模型：一步直达，不要先试模型
-focalapi gen image "<用户提示词>" -o ./focalapi-out --json
-focalapi gen video "<用户提示词>" --no-wait -o ./focalapi-out --json
+# No model specified: run once without probing models first.
+focalapi gen image "<user prompt>" -o ./focalapi-out --json
+focalapi gen video "<user prompt>" --no-wait -o ./focalapi-out --json
 
-# 视频异步续取
+# Continue an asynchronous video task.
 focalapi task status <task-id> --json
 focalapi task download <task-id> -o ./focalapi-out --json
 ```
 
-## 路由表
+## Routing table
 
-| 用户目标 | 入口 | 技能 |
+| User goal | Entry point | Skill |
 | --- | --- | --- |
-| 生图、图片编辑、参考图创作 | `focalapi gen image` | focalapi-gen |
-| 生视频、图生视频、参考素材创作 | `focalapi gen video` | focalapi-gen |
-| 指定/比较模型或查看参数 | `focalapi models resolve/get/search` | focalapi-models |
-| 查询进度、失败原因、下载产物 | `focalapi task status/download` | focalapi-task |
-| Key、401、登录问题 | `focalapi auth status/login` | focalapi-auth |
-| 额度、用量、服务异常 | `focalapi usage/doctor` | focalapi-usage |
-| 用户明确要求文本辅助 | `focalapi chat` | focalapi-chat |
+| Generate or edit images; create from reference images | `focalapi gen image` | focalapi-gen |
+| Generate video; animate images or reference media | `focalapi gen video` | focalapi-gen |
+| Select, compare, or inspect model parameters | `focalapi models resolve/get/search` | focalapi-models |
+| Inspect progress or failures; download results | `focalapi task status/download` | focalapi-task |
+| Resolve key, sign-in, or 401 issues | `focalapi auth status/login` | focalapi-auth |
+| Inspect quota, usage, or service failures | `focalapi usage/doctor` | focalapi-usage |
+| Provide text assistance explicitly requested by the user | `focalapi chat` | focalapi-chat |
 
-当前已闭环验证的自动生成入口是图片与视频。未来出现音频、3D 或其他模态时，
-只有在 CLI 帮助和 `models get` 同时给出可执行契约后才能调用；不要仅凭模型列表或
-名称推断能力。
+The fully validated automatic generation paths currently cover images and video. Audio, 3D, or another modality may be used only after both CLI help and `models get` expose an executable contract. Never infer a capability from a model list or name alone.
 
-若业务命令返回 `missing_api_key`，转 focalapi-auth 完成登录后立即回到原任务；
-其他错误只按 `{error.code, error.hint}` 修复一次，不要盲目轮换模型。
+If a business command returns `missing_api_key`, route to focalapi-auth and return to the original task immediately after sign-in. For other errors, follow `{error.code, error.hint}` once; do not rotate models blindly.

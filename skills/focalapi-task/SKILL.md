@@ -1,25 +1,25 @@
 ---
 name: focalapi-task
 version: 2.0.0
-description: "续取 focalapi 图片/视频异步任务并下载产物。当生成结果包含 task_id/next_command，或用户问进度、失败原因、结果文件时使用；必须复用原 task_id，不重复生成。"
+description: "Continue asynchronous FocalAPI image or video tasks and download their outputs. Use when a generation response contains task_id or next_command, or when the user asks about progress, failure reasons, or result files. Reuse the original task_id and never generate again."
 metadata:
   requires:
     bins: ["focalapi"]
   cliHelp: "focalapi task --help"
 ---
 
-# focalapi 异步任务闭环
+# Complete asynchronous FocalAPI tasks
 
-生成命令返回 `task_id` 后，以响应里的 `next_command` 为第一选择：
+After a generation command returns `task_id`, prefer the response's `next_command`:
 
 ```bash
 focalapi task status <task-id> --json
 focalapi task download <task-id> -o ./focalapi-out --json
 ```
 
-- `pending` / `running`：仍是同一个有效任务，稍后查询；不要重提生成请求。
-- `success`：执行 download，检查文件存在，并把绝对路径交给用户。
-- `failed`：展示上游错误摘要和 hint；只有参数/内容问题被明确指出时才重新生成。
-- `unknown`：保留原始响应并运行 `focalapi doctor --json`，不要伪造成功状态。
+- `pending` or `running`: this is still the same valid task. Check it later and do not resubmit generation.
+- `success`: run download, verify that the file exists, and return its absolute path to the user.
+- `failed`: show the upstream error summary and hint. Generate again only when an explicit parameter or content issue requires it.
+- `unknown`: preserve the raw response and run `focalapi doctor --json`; never fabricate a success state.
 
-轮询要有边界；用户没有要求阻塞等待时，汇报当前状态和 `task_id` 即可。
+Polling must be bounded. When the user does not ask for blocking wait behavior, report the current status and `task_id`.

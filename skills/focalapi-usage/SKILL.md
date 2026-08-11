@@ -1,14 +1,14 @@
 ---
 name: focalapi-usage
 version: 2.0.0
-description: "查询 focalapi 额度、用量与账单，或诊断网络、鉴权和服务错误。当用户问消费/余额，或业务命令失败且需要按错误码闭环时使用；正常生成前不强制增加诊断步骤。"
+description: "Inspect FocalAPI quota, usage, and billing, or diagnose network, authentication, and service errors. Use when the user asks about spend or balance, or when a failed business command needs an error-code-driven resolution. Do not add mandatory diagnostics before normal generation."
 metadata:
   requires:
     bins: ["focalapi"]
   cliHelp: "focalapi usage --help"
 ---
 
-# focalapi 用量与诊断
+# FocalAPI usage and diagnostics
 
 ```bash
 focalapi usage --json
@@ -16,12 +16,11 @@ focalapi auth status --json
 focalapi doctor --json
 ```
 
-- 用户问额度、余额、用量或账单：运行 `usage`。
-- `missing_api_key` / `invalid_api_key`：转 focalapi-auth。
-- `insufficient_quota`：运行 `usage`，说明缺口，不自动充值。
-- `network_error` / `timeout` / 5xx：运行一次 `doctor`，按 checks[].hint 处理。
-- `invalid_request`：回到 `models get` 的实时参数契约；不要重复发送同一请求。
-- `upstream_auth_failed`：保留 request ID 并反馈服务方，不要让用户更换本站 Key。
+- For quota, balance, usage, or billing questions, run `usage`.
+- For `missing_api_key` or `invalid_api_key`, route to focalapi-auth.
+- For `insufficient_quota`, run `usage`, explain the shortfall, and do not add funds automatically.
+- For `network_error`, `timeout`, or 5xx errors, run `doctor` once and follow `checks[].hint`.
+- For `invalid_request`, return to the live `models get` parameter contract and do not resend the same request.
+- For `upstream_auth_failed`, preserve the request ID and escalate to the service operator; do not ask the user to replace the FocalAPI key.
 
-正常业务命令没有报错时不要先跑 doctor 或免费演练；Agent 应直接完成用户的创作
-目标，减少无关调用。
+Do not run `doctor` or a free rehearsal before a normal business command that has not failed. The Agent should complete the user's creative goal directly and avoid unrelated calls.

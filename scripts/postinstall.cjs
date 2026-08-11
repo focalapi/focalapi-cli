@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 
 /**
- * npm 全局安装后的 best-effort Agent 接入。
+ * Best-effort Agent integration after global npm installation.
  *
- * 只运行本地 connect：不联网、不读取 API Key、不改 Agent provider。没有检测到
- * Agent 或接入失败都不影响 CLI 安装；用户之后可运行 focalapi connect 修复。
+ * Run local connect only: do not access the network, read an API key, or change an Agent provider.
+ * Missing Agents or integration failures never fail CLI installation; users can run focalapi connect later.
  */
 
 const { existsSync } = require('node:fs');
@@ -30,7 +30,7 @@ if (result.status === 0) {
     const count = Array.isArray(output.installed) ? output.installed.length : 0;
     if (count > 0) console.log(`focalapi-cli: 已自动接入 ${count} 个 Agent Skills 目录；重启 Agent 后生效。`);
   } catch {
-    // connect 成功但输出不可解析不影响安装。
+    // Unparseable output after a successful connect must not fail installation.
   }
   process.exit(0);
 }

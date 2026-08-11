@@ -1,5 +1,5 @@
 /**
- * focalapi audio：语音转写（/v1/audio/transcriptions）与语音合成（/v1/audio/speech）。
+ * focalapi audio: transcription through /v1/audio/transcriptions and speech synthesis through /v1/audio/speech.
  */
 
 import { writeFile } from 'node:fs/promises';

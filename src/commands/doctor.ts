@@ -1,11 +1,11 @@
 /**
- * focalapi doctor：只读链路诊断。
+ * focalapi doctor: read-only end-to-end diagnostics.
  *
- * 检查链（任一失败即给出修复提示，整体退出码非零）：
- *   1. Key 解析（flag/env/config 来源）
- *   2. 网络+鉴权：GET /v1/models
- *   3. 端到端推理：focal-rehearsal-chat 免费演练模型最小对话
- *   4. 额度：GET /api/usage/token/
+ * Check chain; any failure emits a repair hint and produces a non-zero overall exit code:
+ *   1. Resolve the key from flag, environment, or configuration.
+ *   2. Test network and authentication with GET /v1/models.
+ *   3. Run a minimal end-to-end conversation through the free focal-rehearsal-chat model.
+ *   4. Inspect quota through GET /api/usage/token/.
  */
 
 import { Command } from 'commander';
@@ -45,7 +45,7 @@ export function registerDoctor(program: Command): void {
       const g = cmd.optsWithGlobals() as GlobalOpts;
       const results: CheckResult[] = [];
 
-      // 1. Key 解析
+      // 1. Resolve the key.
       let auth: ReturnType<typeof resolveAuth> | undefined;
       results.push(
         await runCheck('API Key 解析', async () => {
@@ -54,7 +54,7 @@ export function registerDoctor(program: Command): void {
         }),
       );
 
-      // 2. 网络 + 鉴权
+      // 2. Test network and authentication.
       if (auth) {
         const a = auth;
         results.push(
@@ -69,7 +69,7 @@ export function registerDoctor(program: Command): void {
           }),
         );
 
-        // 3. 演练模型端到端
+        // 3. Test the rehearsal model end to end.
         results.push(
           await runCheck(`端到端推理（${REHEARSAL_MODEL}，免费演练模型）`, async () => {
             const res = await request<{ choices?: { message?: { content?: unknown } }[] }>({
@@ -85,7 +85,7 @@ export function registerDoctor(program: Command): void {
           }),
         );
 
-        // 4. 额度
+        // 4. Inspect quota.
         results.push(
           await runCheck('额度（GET /api/usage/token/）', async () => {
             const usage = await fetchTokenUsage(a.baseUrl, a.apiKey);

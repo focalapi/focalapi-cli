@@ -2,7 +2,7 @@
 
 # focalapi-cli
 
-**让任意 AI Agent 直接调用 focalapi 创作模型**
+**Give any AI Agent direct access to FocalAPI creative models**
 
 [![npm](https://img.shields.io/npm/v/focalapi-cli?color=brightgreen&label=npm)](https://www.npmjs.com/package/focalapi-cli)
 [![license](https://img.shields.io/badge/license-Apache--2.0-blue)](./LICENSE)
@@ -14,127 +14,111 @@ npm i -g focalapi-cli
 
 </div>
 
-focalapi-cli 把 focalapi 的创作模型中转能力变成 Agent 可直接执行的命令和
-Skills。用户只需描述目标；Agent 不需要先试模型、猜参数、手写请求或切换平台。
+focalapi-cli turns FocalAPI's creative-model gateway into commands and Skills that an Agent can run directly. Users describe the outcome they want; the Agent does not need to probe models, guess parameters, handcraft requests, or switch platforms first.
 
-它不会把 focalapi 配成 Agent 自身的主模型/provider。Codex、Claude Code、
-Cursor 等 Agent 保持原来的推理模型，只在图片、视频等创作任务中调用 focalapi。
+It does not configure FocalAPI as the Agent's primary model or provider. Agents such as Codex, Claude Code, and Cursor keep their existing reasoning models and call FocalAPI only for creative tasks such as image and video generation.
 
-## 三步接入
+## Connect in three steps
 
 ```shell
-# 1. 安装；安装器允许 lifecycle script 时会自动同步 Skills
+# 1. Install. Skills are synchronized automatically when lifecycle scripts are allowed.
 npm i -g focalapi-cli
 
-# 2. 配置 focalapi Key
+# 2. Configure a FocalAPI key.
 focalapi auth login --key sk-xxxx
 
-# 3. 接入全部已检测 Agent（幂等，自动安装过也可重复执行）并验证
+# 3. Connect every detected Agent, then verify the installation. The operation is idempotent.
 focalapi connect
 focalapi connect verify --json
 ```
 
-Key 在 <https://focalapi.com/console/token> 创建。CI/沙箱可使用
-`FOCALAPI_API_KEY`，私有化部署可设置 `FOCALAPI_BASE_URL`。
+Create a key at <https://focalapi.com/console/token>. CI and sandbox environments can use `FOCALAPI_API_KEY`; self-hosted deployments can set `FOCALAPI_BASE_URL`.
 
-如 npm 的安全策略阻止 lifecycle script，显式执行上面的 `focalapi connect` 即可；
-这也是稳定的接入入口。如需主动跳过安装后的自动接入，设置
-`FOCALAPI_SKIP_POSTINSTALL=1`。
+If an npm security policy blocks lifecycle scripts, run `focalapi connect` explicitly. This is also the stable manual integration entry point. Set `FOCALAPI_SKIP_POSTINSTALL=1` to intentionally skip automatic post-install integration.
 
-## Agent 零试错调用
+## Zero-guesswork Agent workflows
 
-不指定模型时，CLI 会读取当前 Key 的实时模型池与单模型详情契约，选择
-focalapi 维护的默认模型；只产生一次真实生成请求。
+When no model is specified, the CLI reads the live model pool and detailed model contract available to the current key, selects the maintained FocalAPI default, and sends only one real generation request.
 
 ```shell
-# 自动选择当前可用的默认图像模型
-focalapi gen image "产品主视觉，工作室柔光" -o ./out --json
+# Automatically select the current default image model.
+focalapi gen image "Product hero image, soft studio lighting" -o ./out --json
 
-# 自动选择当前可用的默认视频模型，立即返回任务 ID
-focalapi gen video "海浪拍打礁石，电影感" --no-wait -o ./out --json
+# Automatically select the current default video model and return a task ID immediately.
+focalapi gen video "Ocean waves hitting rocks, cinematic" --no-wait -o ./out --json
 
-# 沿生成结果里的 next_command 续取，不重复提交
+# Continue from next_command in the generation response without resubmitting the task.
 focalapi task status <task-id> --json
 focalapi task download <task-id> -o ./out --json
 ```
 
-用户明确指定模型时，先读取权威契约：
+When the user specifies a model, read its authoritative contract first:
 
 ```shell
 focalapi models get <model-id> --json
-focalapi gen image "<prompt>" -m <model-id> [契约允许的参数] -o ./out --json
+focalapi gen image "<prompt>" -m <model-id> [contract-supported options] -o ./out --json
 ```
 
-也可以只让 CLI 选模、暂不生成：
+The CLI can also resolve a model without generating anything:
 
 ```shell
 focalapi models resolve image --json
 focalapi models resolve video --json
 ```
 
-`resolve` 返回精确 `model.id`、已确认的 `endpoint_type`、完整
-`supported_params`、候选模型与 `next_command`。模型列表摘要和详情不一致时，
-详情契约始终是权威。
+`resolve` returns the exact `model.id`, verified `endpoint_type`, complete `supported_params`, candidate models, and a `next_command`. When a list summary and detailed contract disagree, the detailed contract is authoritative.
 
-## Agent 接入
+## Agent integration
 
 ```shell
-focalapi connect                         # 安装/修复全部已检测 Agent
-focalapi connect list                    # 只读查看支持、检测与安装状态
-focalapi connect install codex cursor    # 指定 Agent
-focalapi connect install --path <dir>    # 未收录 Agent / 项目级 Skills 目录
-focalapi connect verify --json           # Skills 完整性 + 认证就绪状态
-focalapi connect uninstall               # 只移除未被用户修改的托管 Skills
+focalapi connect                         # Install or repair every detected Agent.
+focalapi connect list                    # Inspect supported, detected, and installed targets.
+focalapi connect install codex cursor    # Install for selected Agents.
+focalapi connect install --path <dir>    # Install to an unlisted or project-level Skills directory.
+focalapi connect verify --json           # Verify Skill integrity and authentication readiness.
+focalapi connect uninstall               # Remove only managed Skills that the user has not modified.
 ```
 
-当前内置 44 个 Agent 目标，覆盖 Claude Code、Codex、Cursor、Gemini CLI、
-GitHub Copilot、OpenCode、OpenClaw、Cline、Windsurf、Warp、Trae、Qwen Code、
-Kimi CLI、Hermes 等。Codex、Cline、Pi、Warp 等共享 `~/.agents/skills` 的目标
-会按路径自动去重，只安装一份。
+The built-in catalog currently covers 44 Agent targets, including Claude Code, Codex, Cursor, Gemini CLI, GitHub Copilot, OpenCode, OpenClaw, Cline, Windsurf, Warp, Trae, Qwen Code, Kimi CLI, and Hermes. Targets such as Codex, Cline, Pi, and Warp that share `~/.agents/skills` are deduplicated by path, so the Skills are installed only once.
 
-安装采用事务式更新：当前 `focalapi-*` catalog 整体写入，任一步失败会回滚；
-manifest 记录每个 Skill 的 SHA-256 目录摘要。默认卸载仅删除摘要未变化的托管
-Skills，用户修改过的内容保留。
+Installation is transactional: the current `focalapi-*` catalog is written as one unit, and any failed step rolls back the operation. The manifest records a SHA-256 directory digest for each Skill. By default, uninstall removes only managed Skills whose digest has not changed and preserves user-modified content.
 
-Skills 的路由契约明确要求：
+The Skill routing contract requires Agents to:
 
-- 用户没点名 focalapi 也会在创作任务中自动触发；
-- 未指定模型时省略 `--model`，由 CLI 自动选择，不先生成测试样例；
-- 指定模型时只按 `models get` 的实时参数契约调用；
-- 异步任务复用原 `task_id`，不因 `pending` 重复扣费；
-- 业务命令报鉴权错误时完成登录后回到原任务，不停在排障步骤。
+- trigger FocalAPI for creative tasks even when the user does not name it;
+- omit `--model` when no model is specified, letting the CLI select one without generating test samples;
+- use only the live parameter contract returned by `models get` for an explicitly selected model;
+- reuse the original `task_id` for asynchronous work instead of charging for duplicate submissions while a task is `pending`;
+- return to the original task after resolving an authentication error rather than stopping at diagnostics.
 
-## 当前能力边界
+## Current capability boundary
 
-当前已闭环验证的自动生成入口是图片和视频，包括图片编辑、参考图创作、文生
-视频和图生视频。CLI 仍保留文本、音频等命令，但只有实时模型详情与 CLI 帮助
-共同给出可执行契约时 Agent 才会调用；不会根据模型名字猜测未来的音频、3D 或
-其他模态能力。
+The fully validated automatic generation paths currently cover images and video, including image editing, reference-image creation, text-to-video, and image-to-video. The CLI retains text and audio commands, but an Agent may use them only when both the live model details and CLI help expose an executable contract. It never infers future audio, 3D, or other modality support from model names alone.
 
-## 面向 Agent 的稳定输出
+## Stable output for Agents
 
-- 所有自动化命令支持 `--json`，stdout 只输出 JSON，进度与诊断走 stderr；
-- 错误统一为 `{ error: { code, message, hint, request_id? } }`；
-- API Key 始终脱敏；
-- 图片结果返回本地 `files`，视频异步结果返回 `task_id` 与 `next_command`；
-- 本地校验会在发请求前拒绝已知的非法计费乘数和模型参数。
+- All automation commands support `--json`; stdout contains JSON only, while progress and diagnostics go to stderr.
+- Errors use `{ error: { code, message, hint, request_id? } }`.
+- API keys are always redacted.
+- Image results return local `files`; asynchronous video results return `task_id` and `next_command`.
+- Local validation rejects known invalid billing multipliers and model parameters before sending a request.
 
-## 命令入口
+## Command map
 
-| 任务 | 命令 |
+| Task | Command |
 | --- | --- |
-| 自动/指定模型生成图片 | `focalapi gen image` |
-| 自动/指定模型生成视频 | `focalapi gen video` |
-| 自动选模与实时契约 | `focalapi models resolve/get/search/list` |
-| 异步任务查询与下载 | `focalapi task status/download` |
-| 登录与 Key 状态 | `focalapi auth login/status/logout` |
-| 额度、用量与诊断 | `focalapi usage`, `focalapi doctor` |
-| Agent Skills 接入 | `focalapi connect` |
-| 只读原始 API | `focalapi request get/head` |
+| Generate images with automatic or explicit model selection | `focalapi gen image` |
+| Generate video with automatic or explicit model selection | `focalapi gen video` |
+| Resolve models and inspect live contracts | `focalapi models resolve/get/search/list` |
+| Check and download asynchronous tasks | `focalapi task status/download` |
+| Sign in and inspect key status | `focalapi auth login/status/logout` |
+| Inspect quota, usage, and diagnostics | `focalapi usage`, `focalapi doctor` |
+| Connect Agent Skills | `focalapi connect` |
+| Make read-only raw API requests | `focalapi request get/head` |
 
-每个命令都有内置帮助：`focalapi <command> --help`。
+Every command includes built-in help: `focalapi <command> --help`.
 
-## 开发验证
+## Development validation
 
 ```shell
 npm install
@@ -143,12 +127,12 @@ npm run build
 npm test
 ```
 
-## 链接
+## Links
 
-- focalapi：<https://focalapi.com>
-- GitHub：<https://github.com/focalapi/focalapi-cli>
-- npm：<https://www.npmjs.com/package/focalapi-cli>
-- 内置 Skills：[`./skills`](./skills)
+- FocalAPI: <https://focalapi.com>
+- GitHub: <https://github.com/focalapi/focalapi-cli>
+- npm: <https://www.npmjs.com/package/focalapi-cli>
+- Bundled Skills: [`./skills`](./skills)
 
 ## License
 

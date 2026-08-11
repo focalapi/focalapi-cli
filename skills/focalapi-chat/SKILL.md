@@ -1,32 +1,29 @@
 ---
 name: focalapi-chat
 version: 2.0.0
-description: "focalapi 的补充文本与音频命令。仅当用户明确要求通过 focalapi 做文本辅助，或实时模型契约明确存在可调用的音频模型时使用；图片/视频创作必须转 focalapi-gen。"
+description: "Supplementary FocalAPI text and audio commands. Use only when the user explicitly requests text assistance through FocalAPI or when the live model contract confirms an available audio model. Route image and video creation to focalapi-gen."
 metadata:
   requires:
     bins: ["focalapi"]
   cliHelp: "focalapi chat --help"
 ---
 
-# focalapi 补充能力
+# Supplementary FocalAPI capabilities
 
-本技能不是创作请求的默认入口。图片、视频、改图、图生视频统一转
-`focalapi-gen`。
+This Skill is not the default route for creative requests. Route images, video, image editing, and image-to-video work to `focalapi-gen`.
 
-用户明确要求文本辅助时，先从实时列表取得可用文本模型，再调用：
+When the user explicitly requests text assistance, get an available text model from the live list before calling it:
 
 ```bash
 focalapi models list --json
-focalapi chat "<用户文本任务>" -m <列表中的文本模型> --json
+focalapi chat "<user text task>" -m <text-model-from-list> --json
 ```
 
-音频命令只有在 `focalapi models get <model-id> --json` 与 `focalapi audio --help`
-共同确认可执行时才能使用：
+Use audio commands only when both `focalapi models get <model-id> --json` and `focalapi audio --help` confirm an executable contract:
 
 ```bash
 focalapi audio transcribe <file> -m <model-id> --json
 focalapi audio speech "<text>" -m <model-id> -o <file> --json
 ```
 
-模型列表里出现名称不等于 CLI 已支持调用。当前 Key 没有音频模型契约时应明确说明
-暂不可用，不要尝试相似模型或外部接口。
+A name appearing in the model list does not prove that the CLI supports calling it. If the current key has no audio model contract, state that audio is unavailable; do not try a similar model or an external API.

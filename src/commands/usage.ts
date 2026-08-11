@@ -1,9 +1,9 @@
 /**
- * focalapi usage：令牌额度与账单用量。
+ * focalapi usage: token quota and billing usage.
  *
- * 数据源（均已核实 sk- key 可达）：
- *   - GET /api/usage/token/                令牌额度（TokenAuthReadOnly）
- *   - GET /v1/dashboard/billing/usage      周期用量（dashboard router 挂 TokenAuth）
+ * Verified data sources available to sk- keys:
+ *   - GET /api/usage/token/                Token quota through TokenAuthReadOnly.
+ *   - GET /v1/dashboard/billing/usage      Period usage through TokenAuth on the dashboard router.
  */
 
 import { Command } from 'commander';

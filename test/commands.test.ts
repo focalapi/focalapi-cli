@@ -1,5 +1,5 @@
 /**
- * 命令级集成测试：经 main(argv) 走完整命令链路，fetch 用路由 mock。
+ * Command-level integration tests that exercise the complete main(argv) path with routed fetch mocks.
  */
 
 import { existsSync, readFileSync } from 'node:fs';
@@ -26,13 +26,13 @@ describe('auth', () => {
     expect(await main(argv('auth', 'login', '--json'))).toBe(0);
     const loginOut = parseStdoutJson();
     expect(loginOut.success).toBe(true);
-    expect(JSON.stringify(loginOut)).not.toContain(VALID_KEY); // 输出必须脱敏
+    expect(JSON.stringify(loginOut)).not.toContain(VALID_KEY); // Output must redact the key.
     expect(existsSync(join(ctx.configDir, 'config.json'))).toBe(true);
 
     expect(await main(['node', 'focalapi', 'auth', 'status', '--json', '--base-url', BASE])).toBe(0);
     const status = parseStdoutJson();
     expect(status.valid).toBe(true);
-    expect(status.keySource).toBe('config'); // 来自 login 落盘
+    expect(status.keySource).toBe('config'); // Written to configuration by login.
 
     expect(await main(argv('auth', 'logout', '--json'))).toBe(0);
     expect(JSON.parse(readFileSync(join(ctx.configDir, 'config.json'), 'utf-8')).profiles.default).toBeUndefined();
@@ -136,7 +136,7 @@ describe('models', () => {
           supported_params: [{ name: 'duration', type: 'integer', minimum: 4, maximum: 30 }],
         }),
         '/v1/models': () => ({ data: [
-          // 列表摘要故意只有 openai；resolve 必须读取详情契约再确定模态。
+          // The list summary intentionally exposes only openai; resolve must read details before determining modality.
           { id: 'dreamina-seedance-2-5-260628', supported_endpoint_types: ['openai'] },
           { id: 'veo-3.1-generate-preview', supported_endpoint_types: ['openai'] },
         ] }),
@@ -712,7 +712,7 @@ describe('doctor', () => {
 
   it('无 key 时报告失败项且退出码非零（不抛异常崩溃）', async () => {
     vi.stubGlobal('fetch', mockFetchRouter({}));
-    // 不传 --key，无 env 无 config
+    // No --key, environment value, or configuration.
     expect(await main(['node', 'focalapi', 'doctor', '--json', '--base-url', BASE])).toBe(1);
     const out = parseStdoutJson() as { ok: boolean; checks: { ok: boolean }[] };
     expect(out.ok).toBe(false);

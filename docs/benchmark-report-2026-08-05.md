@@ -1,106 +1,107 @@
-# focalapi 非 deepseek 模型稳定性/性能基准测试报告
+# FocalAPI non-DeepSeek model stability and performance benchmark
 
-- 日期：2026-08-05
-- 工具：focalapi-cli@0.1.0（全局安装，profile: default）
-- 环境：Windows 本机 → https://api.focalapi.com（洛杉矶搬瓦工）
-- Key：sk-ts***z8Xp（test 令牌，无限额度）
-- 测试目标：除 deepseek-v4-flash/pro 外全部 13 个模型（图像 10 + 视频 3）的稳定性与性能
-- 原则：**结论只基于参数正确、无需纠偏的测试**（seedream 系首次 1024² 失败系测试方参数错误，不计入）
+- Date: 2026-08-05
+- Tool: focalapi-cli@0.1.0, installed globally with the `default` profile
+- Environment: local Windows machine → https://api.focalapi.com (Los Angeles VPS)
+- Key: sk-ts***z8Xp, an unlimited test token
+- Scope: all 13 models other than deepseek-v4-flash/pro (10 image and 3 video models)
+- Rule: **conclusions use only tests with correct parameters that required no correction**. The first Seedream attempts at 1024² failed because the test parameters were invalid and are excluded.
 
-## 测试方法
+## Method
 
-| 项 | 说明 |
+| Area | Method |
 |---|---|
-| 图像 | 10 模型 × 2 次，同一提示词 "a cute orange cat sitting on a wooden windowsill, soft morning sunlight, photorealistic"；seedream 系 2048×2048（模型硬性要求 3.69–16.78MP），其余 1024×1024 |
-| 视频 | 3 模型 × 1 次，5s 1280×720，任务制计时（submit→start→finish 三段时间戳），产物下载验证非 0 字节 |
-| 复现 | `bash .hermes/tmp/img-bench2.sh`（在 focalapi-llm 工作区）；视频用 `focalapi gen video -m <model> --seconds 5 --size 1280x720 --no-wait` + `focalapi task status <task_id>` |
+| Images | 10 models × 2 runs with the same prompt, "a cute orange cat sitting on a wooden windowsill, soft morning sunlight, photorealistic". Seedream used 2048×2048 because the models require 3.69–16.78 MP; other models used 1024×1024. |
+| Video | 3 models × 1 run at 5 seconds and 1280×720. Task timing recorded submit, start, and finish timestamps, and every downloaded artifact was verified as non-empty. |
+| Reproduction | `bash .hermes/tmp/img-bench2.sh` from the focalapi-llm workspace. Video used `focalapi gen video -m <model> --seconds 5 --size 1280x720 --no-wait` followed by `focalapi task status <task_id>`. |
 
-## 图像生成结果（10 模型 × 2 次）
+## Image results (10 models × 2 runs)
 
-| 模型 | run1 | run2 | 成功率 | 性能评价 |
+| Model | Run 1 | Run 2 | Success rate | Assessment |
 |---|---|---|---|---|
-| doubao-seedream-4-5-251128 | ✅ 121.0s | ✅ 31.9s | 2/2 | ⚠️ 波动 4 倍（排队差异） |
-| doubao-seedream-5-0-lite-260128 | ✅ 72.1s | ✅ 62.4s | 2/2 | 中等 |
-| doubao-seedream-5-0-pro-260628 | ✅ 131.4s | ✅ 189.4s | 2/2 | 最慢（2–3 分钟） |
-| gemini-3.1-flash-image-preview | ❌ 1.5s | ❌ 1.4s | 0/2 | **不可用（上游 key 失效）** |
-| gemini-3.1-flash-lite-image-preview | ❌ 1.6s | ❌ 1.9s | 0/2 | **不可用（上游 key 失效）** |
-| gemini-3-pro-image-preview | ❌ 1.2s | ❌ 1.6s | 0/2 | **不可用（上游 key 失效）** |
-| gpt-image-2 | ✅ 33.6s | ✅ 38.3s | 2/2 | 稳定 |
-| grok-imagine-image | ✅ 31.0s | ✅ 28.0s | 2/2 | 稳定 |
-| grok-imagine-image-pro | ✅ 19.8s | ✅ 17.5s | 2/2 | 快且稳 |
-| grok-imagine-image-quality | ✅ 18.8s | ✅ 18.6s | 2/2 | 快且稳 |
+| doubao-seedream-4-5-251128 | ✅ 121.0s | ✅ 31.9s | 2/2 | ⚠️ 4× variation caused by queue differences |
+| doubao-seedream-5-0-lite-260128 | ✅ 72.1s | ✅ 62.4s | 2/2 | Moderate |
+| doubao-seedream-5-0-pro-260628 | ✅ 131.4s | ✅ 189.4s | 2/2 | Slowest at 2–3 minutes |
+| gemini-3.1-flash-image-preview | ❌ 1.5s | ❌ 1.4s | 0/2 | **Unavailable because the upstream key was invalid** |
+| gemini-3.1-flash-lite-image-preview | ❌ 1.6s | ❌ 1.9s | 0/2 | **Unavailable because the upstream key was invalid** |
+| gemini-3-pro-image-preview | ❌ 1.2s | ❌ 1.6s | 0/2 | **Unavailable because the upstream key was invalid** |
+| gpt-image-2 | ✅ 33.6s | ✅ 38.3s | 2/2 | Stable |
+| grok-imagine-image | ✅ 31.0s | ✅ 28.0s | 2/2 | Stable |
+| grok-imagine-image-pro | ✅ 19.8s | ✅ 17.5s | 2/2 | Fast and stable |
+| grok-imagine-image-quality | ✅ 18.8s | ✅ 18.6s | 2/2 | Fast and stable |
 
-- 产物：19 张 PNG 落盘 focalapi-llm/focalapi-bench-img/，全部非 0 字节（241KB–5.9MB）
-- 结论：可用图像模型 7/10，成功率 14/14 = 100%；gemini 系 3 个模型全线故障
+- Artifacts: 19 non-empty PNG files, 241 KB–5.9 MB, written to `focalapi-llm/focalapi-bench-img/`.
+- Conclusion: 7 of 10 image models were available, with 14/14 successful requests. All three Gemini models failed.
 
-## 视频生成结果（3 模型，5s 720p，24fps 含音轨）
+## Video results (3 models, 5 seconds, 720p, 24 fps with audio)
 
-| 模型 | 提交→完成 | 排队 | 纯生成 | 单次扣费(quota) |
+| Model | Submit → finish | Queue | Generation | Charge per request (quota) |
 |---|---|---|---|---|
 | doubao-seedance-2-0-260128 | 130s | 8s | 122s | 340,273 |
 | doubao-seedance-2-0-fast-260128 | 129s | 8s | 121s | 273,698 |
 | doubao-seedance-2-0-mini-260615 | 127s | 7s | 120s | 170,136 |
 
-- 产物：3 个 MP4 落盘 focalapi-llm/focalapi-bench-vid/，4.5–7.5MB，全部有效
-- 结论：3/3 成功；**fast 版无速度优势**（差 1s），仅便宜 20%；mini 便宜 50% 且速度相同
+- Artifacts: three valid 4.5–7.5 MB MP4 files written to `focalapi-llm/focalapi-bench-vid/`.
+- Conclusion: 3/3 succeeded. The fast variant had no measurable speed advantage (1 second difference) and was only 20% cheaper. Mini was 50% cheaper at the same speed.
 
-### 视频复测（同提示词、5 秒、720p、16:9、24fps、含音频）
+### Video retest with the same prompt, 5 seconds, 720p, 16:9, 24 fps, and audio
 
-| 模型 | 提交→完成 | 排队 | 纯生成 | completion_tokens | 最终 quota |
+| Model | Submit → finish | Queue | Generation | completion_tokens | Final quota |
 |---|---:|---:|---:|---:|---:|
 | doubao-seedance-2-0-260128 | 171s | 21s | 150s | 108,000 | 340,273 |
 | doubao-seedance-2-0-fast-260128 | 153s | 35s | 118s | 108,000 | 273,698 |
 | doubao-seedance-2-0-mini-260615 | 122s | 34s | 88s | 108,000 | 170,136 |
 
-- 三个任务均成功，返回的 `total_tokens` 与 `completion_tokens` 均为 108,000；最终 quota 与官方 46/37/23 元每百万 Token 的相对价格完全一致，没有出现 10 倍加价或对音频再次加倍率。
-- 复测的 Fast/Mini 为相近时间提交，排队条件并非严格受控，因此不能把本轮的 118s 解读为官方速度 SLA。两轮合看，Fast 的速度优势不稳定；应将其视为价格档位，而不是对用户承诺固定倍数的低延迟档。
+All three tasks succeeded. Returned `total_tokens` and `completion_tokens` were both 108,000. Final quotas matched the relative official prices of RMB 46/37/23 per million tokens, with no 10× markup or extra audio multiplier.
 
-## 问题清单
+The Fast and Mini retests were submitted at similar times, but queue conditions were not strictly controlled. The 118-second Fast result therefore cannot be treated as an official latency SLA. Across both rounds, the speed advantage was inconsistent; Fast should be considered a pricing tier rather than a guaranteed fixed-multiple low-latency tier.
 
-### CLI 缺陷（focalapi-cli@0.1.0）
+## Findings
 
-| # | 问题 | 证据 | 建议修复 |
+### CLI defects in focalapi-cli@0.1.0
+
+| ID | Issue | Evidence | Recommended fix |
 |---|---|---|---|
-| C1 | **模型参数约束零声明** | `models get` 无尺寸/时长范围；seedream 传 1024² 得 400 才知道要求 3.69–16.78MP。对照 ark-cli：工作流强制「models get 查 supported_params → 再生成」 | CLI 内置模型约束表（或平台 API 补字段），gen 前校验并报"该模型支持 X-Y MP / 4-15s" |
-| C2 | **错误信息不可诊断** | gemini 失败仅显示 `openai_error`，错误码误标 `invalid_api_key`（用户 key 有效，系上游通道 key 失效）→ 误导用户换自己的 key | 透传上游原始 message + request id；错误码与真实原因解耦 |
-| C3 | **usage 表格打印 JSON 原文** | 周期用量显示 `{"object":"list","total_usage":1667.9882}` | 解析 billing 对象后格式化展示 |
-| C4 | **同步图像生成无进度提示** | seedream-5-0-pro 干等 3 分钟零输出，无法区分卡死/生成中 | 输出"生成中…（已等待 Ns）"或进度轮询 |
-| C5 | **models get 表格对象值原样 JSON.stringify** | `supported_endpoint_types` 显示 `"null"` 字符串 | 与 C3 一并修 |
+| C1 | **Model parameter constraints were absent** | `models get` exposed no size or duration ranges. Passing 1024² to Seedream returned a 400 before revealing its 3.69–16.78 MP requirement. In comparison, the Ark CLI workflow requires `models get` to inspect `supported_params` before generation. | Add a CLI model-constraint table or expose the fields through the platform API, then validate before generation and report the supported megapixel or duration range. |
+| C2 | **Errors were not diagnosable** | Gemini failures showed only `openai_error`, while `invalid_api_key` incorrectly blamed the user's valid key instead of the upstream channel key. | Preserve the upstream message and request ID, and separate the error code from the observed symptom. |
+| C3 | **Usage printed raw JSON in the table** | Period usage displayed `{"object":"list","total_usage":1667.9882}`. | Parse and format the billing object. |
+| C4 | **Synchronous image generation had no progress feedback** | seedream-5-0-pro produced no output for three minutes, making a live request indistinguishable from a hang. | Print elapsed generation time or expose progress polling. |
+| C5 | **`models get` stringified object values directly** | `supported_endpoint_types` displayed the string `"null"`. | Fix this with C3. |
 
-### 平台问题（focalapi.com API / 后端）
+### Platform issues in the focalapi.com API/backend
 
-| # | 问题 | 证据 | 备注 |
+| ID | Issue | Evidence | Notes |
 |---|---|---|---|
-| P1 | **gemini 3 个图像模型全线不可用** | 6/6 请求 1.2–1.9s 失败 `invalid_api_key` | **已知问题复现**：2026-08-05 e2e 已记录"gemini-*-image 渠道 401（上游账户鉴权失效）"，至今未修复；建议修复或下架 |
-| P2 | **models list 与 get 数据不一致** | list 返回 `supported_endpoint_types:[image-generation,openai]`，`GET /v1/models/{id}` 返回 `null` | 后端 model_meta 序列化不一致 |
-| P3 | **模型元数据缺参数约束** | `/v1/models/{id}` 无尺寸/时长/数量范围字段（ark 平台有 supported_params） | 平台侧补元数据是 C1 的上游解 |
-| P4 | **图像性能波动大** | seedream-4-5 同参数 121s vs 32s；5-0-pro 131s vs 189s | 同步接口对 agent 调用方不友好，建议提供任务制兜底 |
-| P5 | **seedance-fast 名不副实** | 完成时间与标准版相同（差 1s），仅扣费低 20% | 定价/命名需复核，或上游并发限制所致 |
+| P1 | **All three Gemini image models were unavailable** | 6/6 requests failed in 1.2–1.9 seconds with `invalid_api_key`. | This reproduced a known 2026-08-05 end-to-end finding: the `gemini-*-image` channel returned 401 because upstream account authentication had expired. Repair or remove the models. |
+| P2 | **`models list` and `models get` disagreed** | The list returned `supported_endpoint_types:[image-generation,openai]`, while `GET /v1/models/{id}` returned `null`. | Backend `model_meta` serialization was inconsistent. |
+| P3 | **Model metadata lacked parameter constraints** | `/v1/models/{id}` exposed no size, duration, or quantity range, while the Ark platform exposed `supported_params`. | Platform metadata is the upstream solution for C1. |
+| P4 | **Image latency varied widely** | seedream-4-5 took 121s and 32s with identical parameters; seedream-5-0-pro took 131s and 189s. | A task-based fallback would make synchronous APIs easier for Agents to use. |
+| P5 | **The Seedance Fast name did not match observed latency** | Completion time was effectively the same as the standard variant, with only a 20% lower charge. | Review pricing and naming, or investigate upstream concurrency limits. |
 
-## 洞察
+## Insights
 
-- **性能分层**：grok 系（18–31s）> gpt-image-2（34–38s）> seedream 系（32–189s）。推荐图像首选 grok-imagine-pro/quality；seedream-5-0-pro 除非要高质量否则 3 分钟等待不值。
-- **seedance 选 mini**：速度无差别、价格砍半；fast 是伪需求。
-- **错误链路黑盒是 agent 集成最大风险**（C2/P1）：`openai_error` 折叠错误让调用方无法区分重试/换 key/放弃，属最优先修复项。
+- **Performance tiers:** Grok (18–31s) > gpt-image-2 (34–38s) > Seedream (32–189s). Prefer grok-imagine-pro/quality for images; the three-minute Seedream 5.0 Pro wait was not worthwhile unless its quality was required.
+- **Prefer Seedance Mini:** it was half the price with no observed speed loss. The Fast tier did not establish a stable latency benefit.
+- **Opaque error propagation was the largest Agent-integration risk** (C2/P1). Collapsing errors into `openai_error` prevented callers from deciding whether to retry, replace a key, or stop, making this the highest-priority fix.
 
-## 附注
+## Notes
 
-- 本报告为稳定性基准，非峰值压力测试；性能波动含排队因素（Comfy Cloud 队列）。
-- 测试脚本：focalapi-llm/.hermes/tmp/img-bench2.sh（v1 为参数错误版本已废弃）；如需长期复用建议正式化进 focalapi-cli 仓（scripts/bench + npm run bench）。
+- This is a stability benchmark, not a peak-load stress test. Latency variation includes Comfy Cloud queue time.
+- Test script: `focalapi-llm/.hermes/tmp/img-bench2.sh`. Version 1 used invalid parameters and was retired. A reusable version should live in focalapi-cli under `scripts/bench` with an `npm run bench` entry point.
 
-## 修复复测闭环（2026-08-06，cli d34e33e + llm f66a2ae06 已 push 且部署）
+## Fix verification loop (2026-08-06; CLI d34e33e and LLM f66a2ae06 pushed and deployed)
 
-| 问题 | 状态 | 复测证据 |
+| Issue | Status | Retest evidence |
 |---|---|---|
-| C1 模型约束 | ✅ 双落地 | CLI 本地约束表（model-capabilities.ts）本地拦截非法尺寸；平台 `models get` 返回 supported_params（seedream 3.69–16.78MP 隐含在契约、seedance duration min=4 max=15、resolution/ratio 枚举） |
-| C2 错误不可诊断 | ✅ | 新错误码 `upstream_auth_failed`（提示"上游渠道鉴权失败，并不表示你的 FocalAPI Key 无效"）+ request_id + 上游代码透传；gemini 实测错误从 `invalid_api_key`→`authentication_failed`→`upstream_auth_failed` |
-| C3 usage JSON 原文 | ✅ | 周期用量显示 `1,866.3856` |
-| C4 无进度提示 | ✅ | gen 命令现输出"正在生成图像…" |
-| C5 null 字符串 | ✅ | 显示 `-` |
-| P1 gemini 不可用 | ⏳ 未修 | 错误已可诊断（upstream_auth_failed）但上游 key 仍失效，模型未下架（16 个） |
-| P2 list/get 不一致 | ✅ | get 不再返回 null |
-| P3 元数据缺约束 | ✅ | supported_params + documentation 上线 |
-| P4 性能波动 | ⏳ 非代码问题 | 排队因素（Comfy 队列） |
-| P5 fast 名不副实 | ⏳ 非代码问题 | 上游调度 |
+| C1 model constraints | ✅ Implemented in both layers | The CLI model-capability table rejects invalid sizes locally. Platform `models get` returns `supported_params`, including the implicit Seedream 3.69–16.78 MP contract, Seedance duration min=4/max=15, and resolution/ratio enumerations. |
+| C2 undiagnosable errors | ✅ Fixed | Added `upstream_auth_failed`, which states that upstream authentication failed and does not imply an invalid FocalAPI key, plus `request_id` and upstream-code propagation. Observed Gemini errors progressed from `invalid_api_key` to `authentication_failed` to `upstream_auth_failed`. |
+| C3 raw usage JSON | ✅ Fixed | Period usage displays `1,866.3856`. |
+| C4 no progress feedback | ✅ Fixed | Generation now reports that image generation is in progress. |
+| C5 `null` string | ✅ Fixed | Displays `-`. |
+| P1 Gemini unavailable | ⏳ Not fixed in this retest | Errors were diagnosable through `upstream_auth_failed`, but the upstream key still failed and the 16 models remained listed. |
+| P2 list/get inconsistency | ✅ Fixed | `get` no longer returns null. |
+| P3 metadata lacked constraints | ✅ Fixed | `supported_params` and documentation were published. |
+| P4 latency variation | ⏳ Not a code issue | Caused by queue conditions. |
+| P5 Fast naming | ⏳ Not a code issue | Determined by upstream scheduling. |
 
-回归验证：CLI tsc/build/57 tests 全绿（v0.1.1）；make test 42 ok；图像 seedream-5-0-pro 2048² 成功、视频 seedance-mini 5s 成功（150s，quota 170136 与基准一致）。
+Regression verification: CLI typecheck, build, and 57 tests passed on v0.1.1; `make test` passed 42 checks; seedream-5-0-pro succeeded at 2048²; and Seedance Mini succeeded at 5 seconds in 150 seconds with quota 170,136, matching the baseline.

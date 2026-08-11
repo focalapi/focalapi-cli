@@ -1,49 +1,49 @@
 ---
 name: focalapi-models
 version: 2.0.0
-description: "focalapi 创作模型选择与实时参数契约。当用户未指定模型、点名厂商/模型、比较模型，或生成参数报错时使用；默认用 resolve 直接得到可调用模型，禁止靠模型名猜能力或逐个试。"
+description: "Select FocalAPI creative models and inspect live parameter contracts. Use when the user does not specify a model, names a model or provider, compares models, or encounters a generation-parameter error. Use resolve to obtain a callable default and never infer capabilities from names or probe models one by one."
 metadata:
   requires:
     bins: ["focalapi"]
   cliHelp: "focalapi models --help"
 ---
 
-# focalapi 模型选择
+# FocalAPI model selection
 
-## 最短路径
+## Shortest path
 
-用户未指定模型时，不需要先列全量模型，也不需要 Agent 自己排序：
+When the user does not specify a model, do not list every model or rank them yourself:
 
 ```bash
 focalapi models resolve image --json
 focalapi models resolve video --json
 ```
 
-`resolve` 会读取当前 Key 的实时列表，再读取候选模型的详情契约，返回：
+`resolve` reads the live list available to the current key, then reads detailed contracts for candidate models and returns:
 
-- `model.id`：可直接传给生成命令的精确 ID；
-- `endpoint_type`：已由详情确认的生成端点；
-- `model.supported_params`：本次可用参数、默认值、枚举和范围；
-- `next_command`：无需猜测的下一条命令。
+- `model.id`: the exact ID accepted by generation commands;
+- `endpoint_type`: the generation endpoint verified by model details;
+- `model.supported_params`: available parameters, defaults, enumerations, and ranges;
+- `next_command`: the next command with no guessing required.
 
-如果调用 `focalapi gen image/video` 时省略 `--model`，CLI 内部执行同一选择逻辑。
+Omitting `--model` from `focalapi gen image/video` uses the same selection logic internally.
 
-## 用户指定模型
+## User-selected models
 
 ```bash
-focalapi models get <完整模型-id> --json
+focalapi models get <complete-model-id> --json
 ```
 
-只有用户给的是不完整厂商/系列名时，才先做一次搜索：
+Search once only when the user provides an incomplete provider or family name:
 
 ```bash
 focalapi models search <keyword> --json
-focalapi models get <选中的完整-id> --json
+focalapi models get <selected-complete-id> --json
 ```
 
-规则：
+Rules:
 
-1. `models get` 是端点和参数的最终权威；列表摘要可能只展示协议族，不能据此猜模态。
-2. 不逐个模型发生成请求做可用性测试；模型发现与详情查询是只读预检。
-3. 指定模型不可用时，把可用候选交给用户或回到 `models resolve`，不要偷偷换模型。
-4. 查询完成后回到用户原始生成任务，不要停在模型清单。
+1. `models get` is authoritative for endpoints and parameters. A list summary may show only a protocol family and cannot be used to infer modality.
+2. Do not send generation requests to models one by one as an availability test. Discovery and detail queries are read-only preflight checks.
+3. If an explicitly selected model is unavailable, present available candidates or return to `models resolve`; never replace it silently.
+4. Return to the user's original generation task after the query instead of stopping at the model list.

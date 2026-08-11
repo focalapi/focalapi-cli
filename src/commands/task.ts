@@ -1,5 +1,5 @@
 /**
- * focalapi task：任务状态查询与产物续取（视频等任务制能力通用）。
+ * focalapi task: inspect task status and continue artifact downloads for video and other task-based capabilities.
  */
 
 import { Command } from 'commander';

@@ -1,9 +1,9 @@
 /**
- * 面向 Agent 的创作模型自动选择。
+ * Automatic creative-model selection for Agents.
  *
- * 这里的顺序是 focalapi-cli 明确维护、并通过线上模型契约验证过的产品默认值。
- * 运行时仍以当前 Key 的 /v1/models 与 /v1/models/:id 为准：候选不在当前
- * 模型池或契约不支持目标端点时不会被选中。
+ * This order contains product defaults maintained by focalapi-cli and verified against live contracts.
+ * Runtime selection remains authoritative to /v1/models and /v1/models/:id for the current key.
+ * A candidate is never selected when it is absent from the current pool or its contract lacks the target endpoint.
  */
 
 import { ApiError } from './errors.js';
@@ -72,8 +72,8 @@ export async function resolveCreativeModel(
   const available = new Map((listed.data ?? []).map((model) => [model.id, model]));
   const ranked = RECOMMENDED_MODELS[capability].filter((id) => available.has(id));
 
-  // 新模型可能尚未进入 CLI 的默认排序。仅在列表本身明确给出端点类型时
-  // 才作为降级候选，避免根据模型名字猜测模态。
+  // A new model may not yet be in the CLI default order. Use it as a fallback only when
+  // the list explicitly exposes its endpoint type; never infer modality from its name.
   const discovered = (listed.data ?? [])
     .filter((model) => model.supported_endpoint_types?.includes(endpointType))
     .map((model) => model.id)

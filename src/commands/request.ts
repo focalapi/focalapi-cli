@@ -1,8 +1,8 @@
 /**
- * focalapi request：未被高阶命令覆盖时使用的只读 API 逃生入口。
+ * focalapi request: read-only API escape hatch for endpoints not covered by higher-level commands.
  *
- * 仅允许 GET / HEAD，避免把原始命令误当成隐藏写入接口。常用能力应优先
- * 使用 models、chat、gen 等语义化命令；此命令用于发现或读取新端点。
+ * Allow GET and HEAD only so the raw command cannot become a hidden write interface.
+ * Prefer semantic commands such as models, chat, and gen for common workflows; use this command to discover or read new endpoints.
  */
 
 import { Command } from 'commander';
@@ -57,7 +57,7 @@ export function registerRequest(program: Command): void {
         }
       }
 
-      // 原始请求需要稳定机器可读信封；语义化命令仍维持各自的上游直通形状。
+      // Raw requests need a stable machine-readable envelope; semantic commands retain their upstream-compatible shapes.
       printJson({
         method,
         path,

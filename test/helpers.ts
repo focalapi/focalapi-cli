@@ -1,5 +1,5 @@
 /**
- * 测试基础设施：临时配置目录、fetch 路由 mock、stdout/stderr 捕获。
+ * Test infrastructure for temporary configuration directories, routed fetch mocks, and stdout/stderr capture.
  */
 
 import { mkdtempSync, rmSync } from 'node:fs';
@@ -18,7 +18,7 @@ export interface TestCtx {
 
 type FetchHandler = (init?: RequestInit) => unknown | Response;
 
-/** 按 URL 子串路由的 fetch mock；handler 返回对象自动包成 200 JSON Response。 */
+/** Route a fetch mock by URL substring and wrap object results in a 200 JSON Response. */
 export function mockFetchRouter(routes: Record<string, FetchHandler>) {
   return vi.fn(async (input: unknown, init?: RequestInit): Promise<Response> => {
     const url = typeof input === 'string' ? input : (input as URL).toString();
@@ -101,7 +101,7 @@ export function setupTestEnv(): TestCtx {
     },
     stdout: () => outBuf,
     stderr: () => errBuf,
-    /** 读取并清空 stdout 缓冲（同一用例内多次调用 main 时使用）。 */
+    /** Read and clear the stdout buffer when a test invokes main more than once. */
     takeStdout: (): string => {
       const s = outBuf;
       outBuf = '';

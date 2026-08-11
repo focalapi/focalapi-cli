@@ -1,5 +1,5 @@
 /**
- * CLI 入口：commander 装配 + 全局错误出口。
+ * CLI entry point: Commander assembly and the global error boundary.
  */
 
 import { Command } from 'commander';

@@ -1,13 +1,13 @@
 /**
- * focalapi connect：把内置 Skills 可靠地安装到本机 AI Agent。
+ * focalapi connect: reliably install bundled Skills into local AI Agents.
  *
- * 约束：
- * - 当前 catalog 是 focalapi-* 官方技能名的权威来源；同名技能会整体更新；
- * - 同一路径只执行一次事务，避免 Codex / Cline / Pi / Warp 的共享目录重复安装；
- * - manifest 记录目录摘要，默认卸载只删除未被用户修改的托管技能；
- * - connect 只让 Agent 学会调用 focalapi CLI，不改 Agent 自己的模型/provider。
+ * Invariants:
+ * - The current catalog is authoritative for official focalapi-* Skill names; same-name Skills update as a unit.
+ * - Each path receives one transaction to avoid duplicate installs in shared Codex, Cline, Pi, or Warp directories.
+ * - The manifest records directory digests; default uninstall removes only unmodified managed Skills.
+ * - connect teaches an Agent to call the FocalAPI CLI without changing the Agent's own model or provider.
  *
- * 测试钩子：FOCALAPI_HOME 覆盖 home；FOCALAPI_SKILLS_DIR 覆盖内置 Skills。
+ * Test hooks: FOCALAPI_HOME overrides home; FOCALAPI_SKILLS_DIR overrides bundled Skills.
  */
 
 import { createHash, randomUUID } from 'node:crypto';
@@ -149,7 +149,7 @@ function getTargets(): AgentTarget[] {
   });
 }
 
-/** 兼容打包后（dist/cli.js → ../skills）与开发态（src/commands → ../../skills）。 */
+/** Resolve Skills from both packaged dist/cli.js → ../skills and development src/commands → ../../skills layouts. */
 export function bundledSkillsDir(): string {
   if (process.env.FOCALAPI_SKILLS_DIR) return normalizeHomePath(process.env.FOCALAPI_SKILLS_DIR);
   const here = dirname(fileURLToPath(import.meta.url));
@@ -180,7 +180,7 @@ function readManifest(skillsDir: string): StoredManifest | undefined {
       const manifest = JSON.parse(readFileSync(path, 'utf8')) as StoredManifest;
       if (manifest.tool === 'focalapi-cli' && Array.isArray(manifest.skills)) return manifest;
     } catch {
-      // 损坏的 manifest 由 verify 报告；安装可重新收敛当前 catalog。
+      // verify reports a corrupt manifest; install can converge the current catalog again.
     }
   }
   return undefined;
@@ -276,7 +276,7 @@ function installTo(skillsDir: string, agents: string[], skills: string[], srcDir
       renameSync(join(stageRoot, skill), destination);
     }
 
-    // 退出 catalog 的旧托管技能，仅在摘要仍等于上次安装值时删除；用户修改过的保留。
+    // Remove a retired managed Skill only when its digest still matches the previous install; preserve user edits.
     for (const retired of oldManifest?.skills ?? []) {
       if (skills.includes(retired) || !retired.startsWith('focalapi')) continue;
       const destination = join(skillsDir, retired);

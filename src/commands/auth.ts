@@ -1,7 +1,7 @@
 /**
- * focalapi auth：登录（验证并保存 Key）、状态、登出。
+ * focalapi auth: sign in by validating and saving a key, inspect status, and sign out.
  *
- * 验证走 GET /api/usage/token/（TokenAuthReadOnly，只读不写）。
+ * Validation uses GET /api/usage/token/ through read-only TokenAuthReadOnly middleware.
  */
 
 import { createInterface } from 'node:readline/promises';

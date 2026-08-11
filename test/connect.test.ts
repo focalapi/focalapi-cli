@@ -1,5 +1,5 @@
 /**
- * connect 命令测试：临时 HOME 下的探测、安装、幂等、卸载。
+ * connect command tests for detection, installation, idempotency, and uninstall in a temporary home.
  */
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
@@ -44,7 +44,7 @@ describe('connect', () => {
 
   it('install 复制技能并写 manifest；重复 install 幂等；uninstall 精确清理', async () => {
     mkdirSync(claudeDir(), { recursive: true });
-    // 预置一个无关文件，验证 uninstall 不误删
+    // Seed an unrelated file and verify that uninstall does not remove it.
     mkdirSync(claudeSkillsDir(), { recursive: true });
     writeFileSync(join(claudeSkillsDir(), 'other-skill.txt'), 'keep me');
 
@@ -57,7 +57,7 @@ describe('connect', () => {
     expect(manifest.skills.length).toBeGreaterThanOrEqual(7);
     expect(manifest.digests.focalapi).toMatch(/^[0-9a-f]{64}$/);
 
-    // 幂等：再装一次仍成功
+    // Idempotency: a repeated installation still succeeds.
     expect(await main(argv('connect', 'install', 'claude-code', '--json'))).toBe(0);
 
     expect(await main(argv('connect', 'uninstall', 'claude-code', '--json'))).toBe(0);

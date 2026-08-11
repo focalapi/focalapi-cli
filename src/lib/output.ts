@@ -1,8 +1,8 @@
 /**
- * 输出层：人读 pretty / 机读 JSON 双模式。
+ * Output layer with human-readable pretty mode and machine-readable JSON mode.
  *
- * 约定：JSON 模式下 stdout 只输出 JSON（无颜色、无进度），诊断信息一律走 stderr，
- * 这样 Agent 可以 `focalapi ... --json | jq` 安全串联。
+ * In JSON mode, stdout contains JSON only, with no color or progress output. Diagnostics always
+ * go to stderr so Agents can safely compose `focalapi ... --json | jq`.
  */
 
 import { ApiError } from './errors.js';
@@ -16,13 +16,13 @@ export function isInteractive(): boolean {
 }
 
 /**
- * API Key 形态：sk- 前缀 + 长串纯字母数字（new-api 系为 48 位）。
- * 必须要求左侧边界 + 足够长度，否则任务 ID 这类恰好含 "sk-" 片段的字符串会被误伤
- * （例如文件名 "task-task_nW4RVxsd...mp4" 中的 "sk-task_"）。
+ * API keys use an sk- prefix followed by a long alphanumeric value (48 characters in new-api).
+ * Require a left boundary and sufficient length to avoid redacting task IDs or filenames that
+ * happen to contain an "sk-" fragment, such as "sk-task_" inside "task-task_nW4RVxsd...mp4".
  */
 const KEY_PATTERN = /(?<![A-Za-z0-9_-])sk-[A-Za-z0-9]{20,}/g;
 
-/** 脱敏 API Key：sk-ab***wxyz。短 key 全脱敏。 */
+/** Redact an API key as sk-ab***wxyz; redact short keys completely. */
 export function maskKey(key: string): string {
   if (key.length <= 8) {
     return '***';
@@ -30,7 +30,7 @@ export function maskKey(key: string): string {
   return `${key.slice(0, 5)}***${key.slice(-4)}`;
 }
 
-/** 递归脱敏任意对象中的 apiKey/authorization 字段，防止错误体泄露。 */
+/** Recursively redact apiKey and authorization fields to prevent error-response leakage. */
 export function sanitize(value: unknown): unknown {
   if (typeof value === 'string') {
     return value.replace(KEY_PATTERN, (m) => maskKey(m));
@@ -42,7 +42,7 @@ export function sanitize(value: unknown): unknown {
     const out: Record<string, unknown> = {};
     for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
       if (/api[-_]?key|authorization|token/i.test(k) && typeof v === 'string') {
-        // 敏感字段：先按 sk- 模式局部脱敏（如 "Bearer sk-xxx"），没有 sk- 片段则整体脱敏
+        // Redact sk- fragments such as "Bearer sk-xxx" first; redact the whole value when none exists.
         const replaced = v.replace(KEY_PATTERN, (m) => maskKey(m));
         out[k] = replaced !== v ? replaced : maskKey(v);
       } else {
@@ -66,7 +66,7 @@ export function warn(message: string): void {
   process.stderr.write(`警告：${message}\n`);
 }
 
-/** 统一错误出口：JSON 模式输出结构化错误，否则输出人读格式。exit code 由调用方决定。 */
+/** Unified error output: structured JSON in JSON mode, otherwise human-readable text. The caller sets the exit code. */
 export function printError(err: unknown, opts?: OutputOptions): void {
   if (err instanceof ApiError) {
     if (opts?.json) {
@@ -94,7 +94,7 @@ export function printError(err: unknown, opts?: OutputOptions): void {
   }
 }
 
-/** 表格输出（pretty 模式专用）。列宽按内容自适应。 */
+/** Render a table in pretty mode with content-aware column widths. */
 export function printTable(headers: string[], rows: string[][]): void {
   const widths = headers.map((h, i) =>
     Math.max(displayWidth(h), ...rows.map((r) => displayWidth(r[i] ?? ''))),
@@ -108,7 +108,7 @@ export function printTable(headers: string[], rows: string[][]): void {
   }
 }
 
-/** 中文等宽计算：CJK 字符按 2 列宽。 */
+/** Measure terminal width with CJK characters occupying two columns. */
 function displayWidth(s: string): number {
   let width = 0;
   for (const ch of s) {
@@ -117,7 +117,7 @@ function displayWidth(s: string): number {
   return width;
 }
 
-/** 字节数 → 人读单位。 */
+/** Convert a byte count to a human-readable unit. */
 export function humanBytes(n: number): string {
   if (n < 1024) return `${n} B`;
   if (n < 1024 ** 2) return `${(n / 1024).toFixed(1)} KB`;

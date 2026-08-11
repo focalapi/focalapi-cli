@@ -1,9 +1,9 @@
 /**
- * focalapi gen：图像生成（/v1/images/generations）与视频生成（/v1/video/generations 任务制）。
+ * focalapi gen: image generation through /v1/images/generations and task-based video generation through /v1/video/generations.
  *
- * 计费安全：n、seconds 等计费乘数在 CLI 侧做与后端一致的上限 clamp
- * （对齐 dto.MaxImageN=128、relaycommon.MaxTaskDurationSeconds=3600），
- * 超限直接报错，不把超限请求发给后端。
+ * Billing safety: clamp billing multipliers such as n and seconds to the same limits as the backend,
+ * matching dto.MaxImageN=128 and relaycommon.MaxTaskDurationSeconds=3600.
+ * Reject out-of-range values without sending them to the backend.
  */
 
 import { createWriteStream } from 'node:fs';
@@ -94,7 +94,7 @@ async function saveImageItem(item: ImageResultItem, dir: string, base: string, a
     return filePath;
   }
   if (item.url) {
-    // 上游签名 URL 直链下载；同源 focalapi 链接带 key 也无妨
+    // Download signed upstream URLs directly. A same-origin FocalAPI URL may safely include the key.
     const res = await fetch(item.url, {
       headers: item.url.includes('focalapi') ? { Authorization: `Bearer ${apiKey}` } : undefined,
       signal: AbortSignal.timeout(300_000),
@@ -454,7 +454,7 @@ export function registerGen(program: Command): void {
         const body: Record<string, unknown> = { model, prompt: promptParts.join(' ') };
         const metadata: Record<string, unknown> = {};
         if (opts.seconds !== undefined) {
-          // focalapi 任务 DTO 的 seconds 是字符串类型（对齐 Kling/Seedance 上游格式）
+          // The FocalAPI task DTO represents seconds as a string to match Kling and Seedance upstream formats.
           const seconds = clampInt(opts.seconds, 1, MAX_TASK_DURATION_SECONDS, 'seconds');
           body.duration = seconds;
         }

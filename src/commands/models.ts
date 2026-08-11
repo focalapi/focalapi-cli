@@ -1,5 +1,5 @@
 /**
- * focalapi models：模型列表、搜索与详情。
+ * focalapi models: model listing, search, and details.
  */
 
 import { Command } from 'commander';

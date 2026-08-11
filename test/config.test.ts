@@ -67,7 +67,7 @@ describe('认证解析优先级', () => {
     setProfile('b', { apiKey: 'sk-bbbbbbb22222' });
     expect(resolveAuth({ profile: 'a' }).apiKey).toBe('sk-aaaaaaa11111');
     expect(resolveAuth({ profile: 'b' }).apiKey).toBe('sk-bbbbbbb22222');
-    // currentProfile 指向最后设置的 b
+    // currentProfile points to the most recently selected profile, b.
     expect(resolveAuth({}).apiKey).toBe('sk-bbbbbbb22222');
   });
 });
