@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.1 - 2026-08-11
+
+- Prepared the public GitHub repository metadata and refreshed the project documentation for external contributors.
+- Rewrote bundled Agent Skills and source comments in English while preserving the existing CLI commands and runtime behavior.
+- Clarified that audio transcription and speech synthesis require an explicit model selected from the current key's live model list.
+- Added the CLI verification report and kept local benchmark artifacts out of the published repository.
+
 ## 0.2.0 - 2026-08-11
 
 - Added `models resolve image|video`, backed by the live model list and detailed contracts, so image and video generation can omit `--model` and automatically select a currently available default.
