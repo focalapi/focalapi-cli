@@ -87,3 +87,20 @@
 
 - 本报告为稳定性基准，非峰值压力测试；性能波动含排队因素（Comfy Cloud 队列）。
 - 测试脚本：focalapi-llm/.hermes/tmp/img-bench2.sh（v1 为参数错误版本已废弃）；如需长期复用建议正式化进 focalapi-cli 仓（scripts/bench + npm run bench）。
+
+## 修复复测闭环（2026-08-06，cli d34e33e + llm f66a2ae06 已 push 且部署）
+
+| 问题 | 状态 | 复测证据 |
+|---|---|---|
+| C1 模型约束 | ✅ 双落地 | CLI 本地约束表（model-capabilities.ts）本地拦截非法尺寸；平台 `models get` 返回 supported_params（seedream 3.69–16.78MP 隐含在契约、seedance duration min=4 max=15、resolution/ratio 枚举） |
+| C2 错误不可诊断 | ✅ | 新错误码 `upstream_auth_failed`（提示"上游渠道鉴权失败，并不表示你的 FocalAPI Key 无效"）+ request_id + 上游代码透传；gemini 实测错误从 `invalid_api_key`→`authentication_failed`→`upstream_auth_failed` |
+| C3 usage JSON 原文 | ✅ | 周期用量显示 `1,866.3856` |
+| C4 无进度提示 | ✅ | gen 命令现输出"正在生成图像…" |
+| C5 null 字符串 | ✅ | 显示 `-` |
+| P1 gemini 不可用 | ⏳ 未修 | 错误已可诊断（upstream_auth_failed）但上游 key 仍失效，模型未下架（16 个） |
+| P2 list/get 不一致 | ✅ | get 不再返回 null |
+| P3 元数据缺约束 | ✅ | supported_params + documentation 上线 |
+| P4 性能波动 | ⏳ 非代码问题 | 排队因素（Comfy 队列） |
+| P5 fast 名不副实 | ⏳ 非代码问题 | 上游调度 |
+
+回归验证：CLI tsc/build/57 tests 全绿（v0.1.1）；make test 42 ok；图像 seedream-5-0-pro 2048² 成功、视频 seedance-mini 5s 成功（150s，quota 170136 与基准一致）。

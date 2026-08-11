@@ -13,13 +13,15 @@ import { info, printJson } from '../lib/output.js';
 import type { GlobalOpts } from '../cli.js';
 
 export function registerAudio(program: Command): void {
-  const audio = program.command('audio').description('音频：转写与合成');
+  const audio = program
+    .command('audio')
+    .description('音频：转写与合成（没有默认模型；先运行 focalapi models list 查看当前 Key 可用的音频模型）');
 
   audio
     .command('transcribe')
     .description('语音转文字')
     .argument('<file>', '音频文件路径')
-    .requiredOption('-m, --model <model>', '转写模型 ID')
+    .requiredOption('-m, --model <model>', '转写模型 ID（必填、无默认值；运行 focalapi models list 查看）')
     .option('--language <lang>', '语言代码（如 zh、en）')
     .action(async (file: string, opts: { model: string; language?: string }, cmd: Command) => {
       const g = cmd.optsWithGlobals() as GlobalOpts;
@@ -48,7 +50,7 @@ export function registerAudio(program: Command): void {
     .command('speech')
     .description('文字转语音，产物保存为音频文件')
     .argument('<text...>', '要合成的文本')
-    .requiredOption('-m, --model <model>', 'TTS 模型 ID')
+    .requiredOption('-m, --model <model>', 'TTS 模型 ID（必填、无默认值；运行 focalapi models list 查看）')
     .option('--voice <voice>', '音色', 'alloy')
     .option('--format <fmt>', '音频格式（mp3/wav/...）', 'mp3')
     .option('-o, --out <file>', '输出文件路径')

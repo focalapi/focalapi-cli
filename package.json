@@ -38,7 +38,11 @@
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
-    "url": "https://gitee.com/xnn-ai/focalapi-cli.git"
+    "url": "git+https://github.com/focalapi/focalapi-cli.git"
+  },
+  "homepage": "https://github.com/focalapi/focalapi-cli#readme",
+  "bugs": {
+    "url": "https://github.com/focalapi/focalapi-cli/issues"
   },
   "dependencies": {
     "commander": "^12.1.0"

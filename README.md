@@ -146,7 +146,7 @@ npm test
 ## 链接
 
 - focalapi：<https://focalapi.com>
-- Gitee：<https://gitee.com/xnn-ai/focalapi-cli>
+- GitHub：<https://github.com/focalapi/focalapi-cli>
 - npm：<https://www.npmjs.com/package/focalapi-cli>
 - 内置 Skills：[`./skills`](./skills)
 

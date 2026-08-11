@@ -3,6 +3,7 @@ dist/
 coverage/
 *.tgz
 focalapi-out/
+focalapi-bench-img/
 .env
 .env.*
 !.env.example
