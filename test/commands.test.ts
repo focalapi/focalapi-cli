@@ -138,7 +138,7 @@ describe('models', () => {
         '/v1/models': () => ({ data: [
           // The list summary intentionally exposes only openai; resolve must read details before determining modality.
           { id: 'dreamina-seedance-2-5-260628', supported_endpoint_types: ['openai'] },
-          { id: 'veo-3.1-generate-preview', supported_endpoint_types: ['openai'] },
+          { id: 'kling-3.0', supported_endpoint_types: ['openai'] },
         ] }),
       }),
     );
@@ -390,6 +390,36 @@ describe('gen image', () => {
     ))).toBe(0);
     expect(capturedBody).toMatchObject({ aspect_ratio: '16:9', resolution: '2k', seed: 7 });
   });
+
+  it('sends current Krea fields and rejects unsupported output counts before requesting', async () => {
+    const png = Buffer.from('fake-png-bytes').toString('base64');
+    let capturedBody: Record<string, unknown> | undefined;
+    vi.stubGlobal(
+      'fetch',
+      mockFetchRouter({
+        '/v1/images/generations': (init) => {
+          capturedBody = JSON.parse(String(init?.body)) as Record<string, unknown>;
+          return { created: 1, data: [{ b64_json: png }] };
+        },
+      }),
+    );
+    const outDir = join(ctx.homeDir, 'krea-image-options-out');
+    expect(await main(argv(
+      'gen', 'image', 'x', '-m', 'krea-2-large', '--aspect-ratio', '4:3', '--resolution', '1k',
+      '--seed', '7', '--creativity', 'high', '--style-references', '[{"url":"https://example.com/style.png","strength":0.7}]',
+      '--moodboards', '[{"uuid":"board-1","strength":0.5}]', '-o', outDir, '--json',
+    ))).toBe(0);
+    expect(capturedBody).toMatchObject({
+      aspect_ratio: '4:3', resolution: '1k', seed: 7, creativity: 'high',
+      image_style_references: [{ url: 'https://example.com/style.png', strength: 0.7 }],
+      moodboards: [{ uuid: 'board-1', strength: 0.5 }],
+    });
+
+    const spy = mockFetchRouter({});
+    vi.stubGlobal('fetch', spy);
+    expect(await main(argv('gen', 'image', 'x', '-m', 'krea-2-large', '--n', '2', '--json'))).toBe(1);
+    expect(spy).not.toHaveBeenCalled();
+  });
 });
 
 describe('gen gemini-image documented fields', () => {
@@ -609,34 +639,71 @@ describe('gen video + task', () => {
     expect(spy).not.toHaveBeenCalled();
   });
 
-  it('enforces the official Veo 3.1 duration and resolution matrix before submitting', async () => {
+  it('enforces current Kling and Vidu duration and resolution contracts before submitting', async () => {
     let capturedBody: Record<string, unknown> | undefined;
     vi.stubGlobal(
       'fetch',
       mockFetchRouter({
         '/v1/video/generations': (init) => {
           capturedBody = JSON.parse(String(init?.body)) as Record<string, unknown>;
-          return { task_id: 'veo-31', status: 'submitted' };
+          return { task_id: 'kling-30', status: 'submitted' };
         },
       }),
     );
     expect(await main(argv(
-      'gen', 'video', 'cinematic ocean', '-m', 'veo-3.1-generate-preview',
-      '--seconds', '8', '--resolution', '4k', '--ratio', '16:9', '--no-wait', '--json',
+      'gen', 'video', 'cinematic ocean', '-m', 'kling-3.0',
+      '--seconds', '15', '--resolution', '4k', '--aspect-ratio', '16:9', '--no-wait', '--json',
     ))).toBe(0);
     expect(capturedBody).toMatchObject({
-      model: 'veo-3.1-generate-preview', duration: 8, metadata: { resolution: '4k', ratio: '16:9' },
+      model: 'kling-3.0', duration: 15, metadata: { resolution: '4k', ratio: '16:9' },
     });
 
     const spy = mockFetchRouter({});
     vi.stubGlobal('fetch', spy);
     expect(await main(argv(
-      'gen', 'video', 'x', '-m', 'veo-3.1-fast-generate-preview',
-      '--seconds', '6', '--resolution', '1080p', '--no-wait', '--json',
+      'gen', 'video', 'x', '-m', 'kling-3.0',
+      '--seconds', '16', '--resolution', '1080p', '--no-wait', '--json',
     ))).toBe(1);
     expect(await main(argv(
-      'gen', 'video', 'x', '-m', 'veo-3.1-lite-generate-preview',
+      'gen', 'video', 'x', '-m', 'viduq3-pro',
       '--seconds', '8', '--resolution', '4k', '--no-wait', '--json',
+    ))).toBe(1);
+    expect(spy).not.toHaveBeenCalled();
+  });
+
+  it('maps LTX and FLUX 3 parameters and validates their live ranges', async () => {
+    let capturedBody: Record<string, unknown> | undefined;
+    vi.stubGlobal(
+      'fetch',
+      mockFetchRouter({
+        '/v1/video/generations': (init) => {
+          capturedBody = JSON.parse(String(init?.body)) as Record<string, unknown>;
+          return { task_id: 'ltx-25', status: 'submitted' };
+        },
+      }),
+    );
+    expect(await main(argv(
+      'gen', 'video', 'cinematic ocean', '-m', 'ltx-2-5-fast', '--seconds', '12',
+      '--resolution', '1920x1080', '--fps', '25', '--seed', '42', '--no-wait', '--json',
+    ))).toBe(0);
+    expect(capturedBody).toMatchObject({
+      model: 'ltx-2-5-fast', duration: 12,
+      metadata: { resolution: '1920x1080', fps: 25, seed: 42 },
+    });
+
+    vi.stubGlobal(
+      'fetch',
+      mockFetchRouter({ '/v1/video/generations': () => ({ task_id: 'flux-3', status: 'submitted' }) }),
+    );
+    expect(await main(argv(
+      'gen', 'video', 'cinematic ocean', '-m', 'flux-3', '--seconds', '20',
+      '--resolution', 'fhd', '--ratio', '21:9', '--safety-tolerance', '4', '--no-wait', '--json',
+    ))).toBe(0);
+
+    const spy = mockFetchRouter({});
+    vi.stubGlobal('fetch', spy);
+    expect(await main(argv(
+      'gen', 'video', 'x', '-m', 'flux-3', '--seconds', '20', '--safety-tolerance', '5', '--no-wait', '--json',
     ))).toBe(1);
     expect(spy).not.toHaveBeenCalled();
   });

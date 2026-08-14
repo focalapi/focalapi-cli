@@ -1,6 +1,6 @@
 ---
 name: focalapi-models
-version: 2.0.0
+version: 2.1.0
 description: "Select FocalAPI creative models and inspect live parameter contracts. Use when the user does not specify a model, names a model or provider, compares models, or encounters a generation-parameter error. Use resolve to obtain a callable default and never infer capabilities from names or probe models one by one."
 metadata:
   requires:
@@ -47,3 +47,9 @@ Rules:
 2. Do not send generation requests to models one by one as an availability test. Discovery and detail queries are read-only preflight checks.
 3. If an explicitly selected model is unavailable, present available candidates or return to `models resolve`; never replace it silently.
 4. Return to the user's original generation task after the query instead of stopping at the model list.
+
+## Current verified creative families
+
+The maintained defaults currently prefer Seedream 5.0, GPT Image 2, Gemini 3.1 Image, Grok Imagine Image 2.0, Kling Image 3.0, Qwen Image 3.0, and Krea 2 for images. Video selection currently covers Seedance 2.5, Kling 3.0, Vidu Q3, Gemini Omni Flash, Grok Imagine Video 1.5, LTX 2.5, FLUX 3, and MiniMax H3.
+
+These names are routing context, not permission to guess a model ID. Use the exact canonical ID returned by `models resolve` or `models get`. Removed IDs, including the former Veo 3.1 preview models, must not be retried.

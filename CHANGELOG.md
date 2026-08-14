@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.2 - 2026-08-14
+
+- Removed the retired Veo 3.1 preview models from automatic video selection and local validation.
+- Aligned automatic selection with the current Seedance, Kling, Vidu, Grok, LTX, FLUX, MiniMax, Seedream, Gemini, Qwen, and Krea catalog.
+- Added local parameter validation and CLI options for the current Krea, Kling, Qwen, Grok Image 2.0, LTX 2.5, FLUX 3, Vidu Q3, and MiniMax H3 contracts.
+- Refreshed bundled Agent Skills so explicit-model workflows use the current model families and role-aware content fields.
+
 ## 0.2.1 - 2026-08-11
 
 - Prepared the public GitHub repository metadata and refreshed the project documentation for external contributors.

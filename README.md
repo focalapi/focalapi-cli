@@ -68,6 +68,8 @@ focalapi models resolve video --json
 
 `resolve` returns the exact `model.id`, verified `endpoint_type`, complete `supported_params`, candidate models, and a `next_command`. When a list summary and detailed contract disagree, the detailed contract is authoritative.
 
+The maintained creative defaults are aligned with the current catalog: Seedream 5.0, GPT Image 2, Gemini 3.1 Image, Grok Imagine Image 2.0, Kling Image 3.0, Qwen Image 3.0, and Krea 2 for images; Seedance 2.5, Kling 3.0, Vidu Q3, Gemini Omni Flash, Grok Imagine Video 1.5, LTX 2.5, FLUX 3, and MiniMax H3 for video. Availability still depends on the current key, so runtime model details always take precedence over this overview.
+
 ## Agent integration
 
 ```shell

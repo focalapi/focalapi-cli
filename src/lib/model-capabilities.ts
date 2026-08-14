@@ -14,7 +14,7 @@ export type SupportedParameter = {
 };
 
 type ImageGenerationConstraint = {
-  defaultSize: string;
+  defaultSize?: string;
   maxN: number;
   sizeTiers?: string[];
   maxReferenceImages?: number;
@@ -33,18 +33,27 @@ type ImageGenerationConstraint = {
   supportsWatermark?: boolean;
   outputFormats?: string[];
   optimizePromptModes?: string[];
+  creativityModes?: string[];
+  supportsNegativePrompt?: boolean;
+  supportsPromptExtend?: boolean;
+  maxStyleReferences?: number;
+  maxMoodboards?: number;
+  maxSeed?: number;
 };
 
 type VideoGenerationConstraint = {
-	resolutions: string[];
-	ratios?: string[];
-	aspectRatios?: string[];
-	minSeconds: number;
-	maxSeconds: number;
-	allowedSeconds?: number[];
-	requiredSecondsByResolution?: Record<string, number>;
-	supportsPriority?: boolean;
+  resolutions: string[];
+  ratios?: string[];
+  aspectRatios?: string[];
+  minSeconds: number;
+  maxSeconds: number;
+  allowedSeconds?: number[];
+  requiredSecondsByResolution?: Record<string, number>;
+  supportsPriority?: boolean;
   supportsSeed?: boolean;
+  maxSeed?: number;
+  allowedFps?: number[];
+  safetyTolerance?: { minimum: number; maximum: number };
 };
 
 type GeminiImageConstraint = {
@@ -58,6 +67,11 @@ const SEEDREAM_OPTIMIZE_PROMPT_MODES = ['auto', 'enabled', 'disabled'];
 const GROK_IMAGE_ASPECT_RATIOS = [
   'auto', '1:1', '2:3', '3:2', '3:4', '4:3', '9:16', '16:9', '9:19.5', '19.5:9', '1:2', '2:1', '1:3', '3:1',
 ];
+const GROK_IMAGE_20_ASPECT_RATIOS = [
+  'auto', '1:1', '2:3', '3:2', '3:4', '4:3', '9:16', '16:9', '9:19.5', '19.5:9', '9:20', '20:9', '1:2', '2:1',
+];
+const KLING_IMAGE_ASPECT_RATIOS = ['16:9', '9:16', '1:1', '4:3', '3:4', '3:2', '2:3', '21:9'];
+const KREA_IMAGE_ASPECT_RATIOS = ['1:1', '4:3', '3:2', '16:9', '2.35:1', '4:5', '2:3', '9:16'];
 
 const IMAGE_CONSTRAINTS: Record<string, ImageGenerationConstraint> = {
   'gpt-image-2': {
@@ -121,32 +135,54 @@ const IMAGE_CONSTRAINTS: Record<string, ImageGenerationConstraint> = {
     optimizePromptModes: SEEDREAM_OPTIMIZE_PROMPT_MODES,
   },
   'grok-imagine-image-quality': {
-    defaultSize: '1024x1024', maxN: 10, maxReferenceImages: 3,
-    aspectRatios: GROK_IMAGE_ASPECT_RATIOS, resolutions: ['1k', '2k'], supportsSeed: true,
+    maxN: 10, maxReferenceImages: 3,
+    aspectRatios: GROK_IMAGE_ASPECT_RATIOS, resolutions: ['1k', '2k'], supportsSeed: true, maxSeed: 2147483647,
   },
   'grok-imagine-image': {
-    defaultSize: '1024x1024', maxN: 10, maxReferenceImages: 3,
-    aspectRatios: GROK_IMAGE_ASPECT_RATIOS, resolutions: ['1k', '2k'], supportsSeed: true,
+    maxN: 10, maxReferenceImages: 3,
+    aspectRatios: GROK_IMAGE_ASPECT_RATIOS, resolutions: ['1k', '2k'], supportsSeed: true, maxSeed: 2147483647,
+  },
+  'grok-imagine-image-2.0': {
+    maxN: 10, maxReferenceImages: 3,
+    aspectRatios: GROK_IMAGE_20_ASPECT_RATIOS, resolutions: ['1k', '2k'], qualities: ['low', 'medium'],
+    supportsSeed: true, maxSeed: 2147483647,
+  },
+  'kling-v3': {
+    maxN: 9, maxReferenceImages: 1, aspectRatios: KLING_IMAGE_ASPECT_RATIOS, supportsNegativePrompt: true,
+  },
+  'krea-2-medium': {
+    maxN: 1, maxReferenceImages: 0, aspectRatios: KREA_IMAGE_ASPECT_RATIOS, resolutions: ['1k'], supportsSeed: true,
+    maxSeed: 2147483647, creativityModes: ['raw', 'low', 'medium', 'high'], maxStyleReferences: 10, maxMoodboards: 1,
+  },
+  'krea-2-medium-turbo': {
+    maxN: 1, maxReferenceImages: 0, aspectRatios: KREA_IMAGE_ASPECT_RATIOS, resolutions: ['1k'], supportsSeed: true,
+    maxSeed: 2147483647, creativityModes: ['raw', 'low', 'medium', 'high'], maxStyleReferences: 10, maxMoodboards: 1,
+  },
+  'krea-2-large': {
+    maxN: 1, maxReferenceImages: 0, aspectRatios: KREA_IMAGE_ASPECT_RATIOS, resolutions: ['1k'], supportsSeed: true,
+    maxSeed: 2147483647, creativityModes: ['raw', 'low', 'medium', 'high'], maxStyleReferences: 10, maxMoodboards: 1,
+  },
+  'qwen-image-3.0': {
+    defaultSize: '1024x1024', maxN: 6, maxReferenceImages: 3, minMegapixels: 0.262144,
+    maxMegapixels: 4.194304, maxAspectRatio: 8, supportsSeed: true, maxSeed: 2147483647,
+    supportsNegativePrompt: true, supportsPromptExtend: true, supportsWatermark: true,
+  },
+  'qwen-image-3.0-pro': {
+    defaultSize: '1024x1024', maxN: 6, maxReferenceImages: 3, minMegapixels: 0.262144,
+    maxMegapixels: 4.194304, maxAspectRatio: 8, supportsSeed: true, maxSeed: 2147483647,
+    supportsNegativePrompt: true, supportsPromptExtend: true, supportsWatermark: true,
   },
 };
 
 const SEEDANCE_RATIOS = ['adaptive', '16:9', '4:3', '1:1', '3:4', '9:16', '21:9'];
 const GROK_VIDEO_ASPECT_RATIOS = ['auto', '16:9', '4:3', '3:2', '1:1', '2:3', '3:4', '9:16'];
+const KLING_VIDEO_ASPECT_RATIOS = ['16:9', '9:16', '1:1'];
+const VIDU_VIDEO_ASPECT_RATIOS = ['16:9', '9:16', '3:4', '4:3', '1:1'];
+const MINIMAX_VIDEO_RATIOS = ['16:9', '4:3', '1:1', '3:4', '9:16', '21:9', 'adaptive'];
+const FLUX_VIDEO_RATIOS = ['auto', '21:9', '2:1', '16:9', '4:3', '1:1', '3:4', '9:16'];
 
 const VIDEO_CONSTRAINTS: Record<string, VideoGenerationConstraint> = {
-	'veo-3.1-generate-preview': {
-		resolutions: ['720p', '1080p', '4k'], ratios: ['16:9', '9:16'], minSeconds: 4, maxSeconds: 8,
-		allowedSeconds: [4, 6, 8], requiredSecondsByResolution: { '1080p': 8, '4k': 8 }, supportsSeed: true,
-	},
-	'veo-3.1-fast-generate-preview': {
-		resolutions: ['720p', '1080p', '4k'], ratios: ['16:9', '9:16'], minSeconds: 4, maxSeconds: 8,
-		allowedSeconds: [4, 6, 8], requiredSecondsByResolution: { '1080p': 8, '4k': 8 }, supportsSeed: true,
-	},
-	'veo-3.1-lite-generate-preview': {
-		resolutions: ['720p', '1080p'], ratios: ['16:9', '9:16'], minSeconds: 4, maxSeconds: 8,
-		allowedSeconds: [4, 6, 8], requiredSecondsByResolution: { '1080p': 8 }, supportsSeed: true,
-	},
-	'dreamina-seedance-2-0-260128': {
+  'dreamina-seedance-2-0-260128': {
     resolutions: ['480p', '720p', '1080p', '4k'], ratios: SEEDANCE_RATIOS, minSeconds: 4, maxSeconds: 15, supportsPriority: true,
   },
   'dreamina-seedance-2-0-fast-260128': {
@@ -158,11 +194,44 @@ const VIDEO_CONSTRAINTS: Record<string, VideoGenerationConstraint> = {
   'dreamina-seedance-2-5-260628': {
     resolutions: ['480p', '720p'], ratios: SEEDANCE_RATIOS, minSeconds: 4, maxSeconds: 30,
   },
+  'gemini-omni-flash-preview': {
+    resolutions: [], ratios: ['16:9', '9:16'], minSeconds: 3, maxSeconds: 10,
+  },
   'grok-imagine-video': {
-    resolutions: ['480p', '720p', '1080p'], aspectRatios: GROK_VIDEO_ASPECT_RATIOS, minSeconds: 1, maxSeconds: 15, supportsSeed: true,
+    resolutions: ['480p', '720p', '1080p'], aspectRatios: GROK_VIDEO_ASPECT_RATIOS,
+    minSeconds: 1, maxSeconds: 15, supportsSeed: true, maxSeed: 2147483647,
   },
   'grok-imagine-video-1.5': {
-    resolutions: ['480p', '720p', '1080p'], aspectRatios: GROK_VIDEO_ASPECT_RATIOS, minSeconds: 1, maxSeconds: 15, supportsSeed: true,
+    resolutions: ['480p', '720p', '1080p'], aspectRatios: GROK_VIDEO_ASPECT_RATIOS,
+    minSeconds: 1, maxSeconds: 15, supportsSeed: true, maxSeed: 2147483647,
+  },
+  'kling-3.0': {
+    resolutions: ['720p', '1080p', '4k'], aspectRatios: KLING_VIDEO_ASPECT_RATIOS, minSeconds: 3, maxSeconds: 15,
+  },
+  'viduq3-pro': {
+    resolutions: ['720p', '1080p'], aspectRatios: VIDU_VIDEO_ASPECT_RATIOS,
+    minSeconds: 1, maxSeconds: 16, supportsSeed: true, maxSeed: 2147483647,
+  },
+  'viduq3-turbo': {
+    resolutions: ['720p', '1080p'], aspectRatios: VIDU_VIDEO_ASPECT_RATIOS,
+    minSeconds: 1, maxSeconds: 16, supportsSeed: true, maxSeed: 2147483647,
+  },
+  'MiniMax-H3': {
+    resolutions: ['768p', '2k'], ratios: MINIMAX_VIDEO_RATIOS, minSeconds: 5, maxSeconds: 15,
+  },
+  'ltx-2-5-fast': {
+    resolutions: ['1280x720', '720x1280', '1920x1080', '1080x1920', '2560x1440', '1440x2560', '3840x2160', '2160x3840'],
+    minSeconds: 2, maxSeconds: 20, allowedSeconds: [2, 3, 4, 5, 6, 8, 10, 12, 14, 16, 18, 20],
+    supportsSeed: true, maxSeed: 4294967295, allowedFps: [24, 25, 48, 50],
+  },
+  'ltx-2-5-pro': {
+    resolutions: ['1280x720', '720x1280', '1920x1080', '1080x1920'],
+    minSeconds: 2, maxSeconds: 10, allowedSeconds: [2, 3, 4, 5, 6, 8, 10],
+    supportsSeed: true, maxSeed: 4294967295, allowedFps: [24, 25, 50],
+  },
+  'flux-3': {
+    resolutions: ['hd', 'fhd'], ratios: FLUX_VIDEO_RATIOS, minSeconds: 5, maxSeconds: 20,
+    safetyTolerance: { minimum: 0, maximum: 4 },
   },
 };
 
@@ -223,6 +292,11 @@ export function validateImageGeneration(
     watermark?: boolean;
     outputFormat?: string;
     optimizePrompt?: string;
+    negativePrompt?: string;
+    creativity?: string;
+    promptExtend?: boolean;
+    styleReferenceCount?: number;
+    moodboardCount?: number;
   },
 ): void {
   if (input.responseFormat && input.responseFormat !== 'url' && input.responseFormat !== 'b64_json') {
@@ -248,18 +322,45 @@ export function validateImageGeneration(
   validateOptionalChoice(model, 'resolution', input.resolution, constraint.resolutions);
   validateOptionalChoice(model, 'output_format', input.outputFormat, constraint.outputFormats);
   validateOptionalChoice(model, 'optimize_prompt', input.optimizePrompt, constraint.optimizePromptModes);
+  validateOptionalChoice(model, 'creativity', input.creativity, constraint.creativityModes);
+  if (input.negativePrompt !== undefined && !constraint.supportsNegativePrompt) {
+    throw new ApiError('invalid_request', `${model} does not support negative_prompt`);
+  }
+  if (input.negativePrompt !== undefined && model === 'kling-v3' && (input.imageCount ?? 0) > 0) {
+    throw new ApiError('invalid_request', 'kling-v3 negative_prompt cannot be combined with an image input');
+  }
+  if (input.promptExtend !== undefined && !constraint.supportsPromptExtend) {
+    throw new ApiError('invalid_request', `${model} does not support prompt_extend`);
+  }
+  if (input.styleReferenceCount !== undefined && (
+    constraint.maxStyleReferences === undefined || input.styleReferenceCount > constraint.maxStyleReferences
+  )) {
+    throw new ApiError('invalid_request', `${model} supports at most ${constraint.maxStyleReferences ?? 0} image style references`);
+  }
+  if (input.moodboardCount !== undefined && (
+    constraint.maxMoodboards === undefined || input.moodboardCount > constraint.maxMoodboards
+  )) {
+    throw new ApiError('invalid_request', `${model} supports at most ${constraint.maxMoodboards ?? 0} moodboards`);
+  }
   if (input.seed !== undefined) {
     if (!constraint.supportsSeed) {
       throw new ApiError('invalid_request', `${model} does not support seed`);
     }
-    if (!Number.isInteger(input.seed) || input.seed < 0) {
-      throw new ApiError('invalid_request', 'seed must be a non-negative integer');
+    if (!Number.isInteger(input.seed) || input.seed < 0 || (constraint.maxSeed !== undefined && input.seed > constraint.maxSeed)) {
+      const maximum = constraint.maxSeed === undefined ? '' : ` no greater than ${constraint.maxSeed}`;
+      throw new ApiError('invalid_request', `seed must be a non-negative integer${maximum}`);
     }
   }
   if (input.watermark !== undefined && !constraint.supportsWatermark) {
     throw new ApiError('invalid_request', `${model} does not support watermark`);
   }
 
+  if (!constraint.defaultSize) {
+    if (input.size) {
+      throw new ApiError('invalid_request', `${model} does not support size; use its aspect_ratio or resolution parameter`);
+    }
+    return;
+  }
   const suppliedSize = input.size ?? constraint.defaultSize;
   if (constraint.sizeTiers?.includes(suppliedSize.toLowerCase())) return;
   if (constraint.sizeTiers && !/^\d+x\d+$/i.test(suppliedSize)) {
@@ -326,6 +427,8 @@ export function validateVideoGeneration(
     seed?: number;
     serviceTier?: string;
     priority?: number;
+    fps?: number;
+    safetyTolerance?: number;
     executionExpiresAfter?: number;
     safetyIdentifier?: string;
   },
@@ -367,9 +470,24 @@ export function validateVideoGeneration(
     if (!constraint.supportsSeed) {
       throw new ApiError('invalid_request', `${model} does not support seed`);
     }
-    if (!Number.isInteger(input.seed) || input.seed < 0) {
-      throw new ApiError('invalid_request', 'seed must be a non-negative integer');
+    if (!Number.isInteger(input.seed) || input.seed < 0 || (constraint.maxSeed !== undefined && input.seed > constraint.maxSeed)) {
+      const maximum = constraint.maxSeed === undefined ? '' : ` no greater than ${constraint.maxSeed}`;
+      throw new ApiError('invalid_request', `seed must be a non-negative integer${maximum}`);
     }
+  }
+  if (input.fps !== undefined && (!constraint.allowedFps || !constraint.allowedFps.includes(input.fps))) {
+    throw new ApiError('invalid_request', `${model} fps must be one of ${constraint.allowedFps?.join(', ') ?? 'none'} (received: ${input.fps})`);
+  }
+  if (input.safetyTolerance !== undefined && (
+    !constraint.safetyTolerance ||
+    !Number.isInteger(input.safetyTolerance) ||
+    input.safetyTolerance < constraint.safetyTolerance.minimum ||
+    input.safetyTolerance > constraint.safetyTolerance.maximum
+  )) {
+    const range = constraint.safetyTolerance
+      ? `${constraint.safetyTolerance.minimum}-${constraint.safetyTolerance.maximum}`
+      : 'unsupported';
+    throw new ApiError('invalid_request', `${model} safety_tolerance must be ${range} (received: ${input.safetyTolerance})`);
   }
   if (input.priority !== undefined && !constraint.supportsPriority) {
     throw new ApiError('invalid_request', `${model} does not support priority`);

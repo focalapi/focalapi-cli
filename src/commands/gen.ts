@@ -187,12 +187,17 @@ export function registerGen(program: Command): void {
     .argument('<prompt...>', '提示词')
     .option('-m, --model <model>', '图像模型 ID；省略时由 focalapi 自动选择')
     .option('--size <size>', '尺寸，如 1024x1024')
-    .option('--aspect-ratio <ratio>', '原生画面比例（仅 Grok 图像模型），如 16:9')
-    .option('--resolution <resolution>', '原生输出档位（仅 Grok 图像模型），如 1k、2k')
-    .option('--seed <n>', '随机种子（仅 Grok 图像模型，非负整数）', (v) => Number.parseInt(v, 10))
+    .option('--aspect-ratio <ratio>', '模型原生画面比例，如 16:9')
+    .option('--resolution <resolution>', '模型原生输出档位，如 1k、2k')
+    .option('--seed <n>', '模型随机种子（非负整数）', (v) => Number.parseInt(v, 10))
     .option('--quality <quality>', '图像质量档位（仅支持该参数的模型生效）')
     .option('--background <background>', '背景模式（仅 gpt-image-2 支持 auto/opaque）')
-    .option('--watermark <boolean>', '是否添加水印（仅 Seedream，true 或 false）', (v) => parseBooleanOption(v, 'watermark'))
+    .option('--negative-prompt <text>', '负面提示词（仅支持该参数的模型生效）')
+    .option('--creativity <level>', '提示词扩展强度，如 raw、low、medium、high')
+    .option('--prompt-extend <boolean>', '是否扩展提示词（只接受 true 或 false）', (v) => parseBooleanOption(v, 'prompt-extend'))
+    .option('--style-references <json>', 'Krea image_style_references JSON 数组')
+    .option('--moodboards <json>', 'Krea moodboards JSON 数组')
+    .option('--watermark <boolean>', '是否添加水印（仅支持该参数的模型生效）', (v) => parseBooleanOption(v, 'watermark'))
     .option('--output-format <format>', '输出格式（仅 Seedream：png 或 jpeg）')
     .option('--optimize-prompt <mode>', '提示词优化（仅 Seedream：auto、enabled 或 disabled）')
     .option('--image <url...>', '参考图或编辑图 URL，可多个')
@@ -201,12 +206,14 @@ export function registerGen(program: Command): void {
     .option('--n <count>', '张数（1–128）', (v) => Number.parseInt(v, 10), 1)
     .option('--no-wait', '提交后立即返回 task_id，不等待图像生成完成')
     .option('-o, --out <dir>', '输出目录', DEFAULT_OUT_DIR)
-    .action(async (promptParts: string[], opts: { model?: string; size?: string; aspectRatio?: string; resolution?: string; seed?: number; quality?: string; background?: string; watermark?: boolean; outputFormat?: string; optimizePrompt?: string; image?: string[]; mask?: string; responseFormat?: string; n: number; wait?: boolean; out: string }, cmd: Command) => {
+    .action(async (promptParts: string[], opts: { model?: string; size?: string; aspectRatio?: string; resolution?: string; seed?: number; quality?: string; background?: string; negativePrompt?: string; creativity?: string; promptExtend?: boolean; styleReferences?: string; moodboards?: string; watermark?: boolean; outputFormat?: string; optimizePrompt?: string; image?: string[]; mask?: string; responseFormat?: string; n: number; wait?: boolean; out: string }, cmd: Command) => {
       const g = cmd.optsWithGlobals() as GlobalOpts;
       const auth = resolveAuth(g);
       const model = opts.model ?? (await resolveCreativeModel(auth, 'image')).model.id;
       if (!opts.model && !g.json) info(`已自动选择图像模型：${model}`);
       const n = clampInt(opts.n, 1, MAX_IMAGE_N, 'n');
+      const styleReferences = opts.styleReferences ? parseJsonArray(opts.styleReferences, 'style-references') : undefined;
+      const moodboards = opts.moodboards ? parseJsonArray(opts.moodboards, 'moodboards') : undefined;
       validateImageGeneration(model, {
         n,
         size: opts.size,
@@ -218,6 +225,11 @@ export function registerGen(program: Command): void {
         watermark: opts.watermark,
         outputFormat: opts.outputFormat,
         optimizePrompt: opts.optimizePrompt,
+        negativePrompt: opts.negativePrompt,
+        creativity: opts.creativity,
+        promptExtend: opts.promptExtend,
+        styleReferenceCount: styleReferences?.length,
+        moodboardCount: moodboards?.length,
         responseFormat: opts.responseFormat,
         imageCount: opts.image?.length,
         hasMask: Boolean(opts.mask),
@@ -232,6 +244,11 @@ export function registerGen(program: Command): void {
       if (opts.seed !== undefined) body.seed = opts.seed;
       if (opts.quality) body.quality = opts.quality;
       if (opts.background) body.background = opts.background;
+      if (opts.negativePrompt) body.negative_prompt = opts.negativePrompt;
+      if (opts.creativity) body.creativity = opts.creativity.toLowerCase();
+      if (opts.promptExtend !== undefined) body.prompt_extend = opts.promptExtend;
+      if (styleReferences) body.image_style_references = styleReferences;
+      if (moodboards) body.moodboards = moodboards;
       if (opts.watermark !== undefined) body.watermark = opts.watermark;
       if (opts.outputFormat) body.output_format = opts.outputFormat.toLowerCase();
       if (opts.optimizePrompt) body.optimize_prompt_options = { thinking: opts.optimizePrompt.toLowerCase() };
@@ -420,8 +437,10 @@ export function registerGen(program: Command): void {
     .option('--size <size>', '分辨率，如 1280x720')
     .option('--resolution <resolution>', '原生输出分辨率，如 480p、720p、1080p、4k')
     .option('--ratio <ratio>', '原生宽高比，如 16:9、9:16、adaptive')
-    .option('--aspect-ratio <ratio>', 'Grok 视频原生画面比例，如 16:9、9:16、auto')
-    .option('--seed <n>', 'Grok 视频随机种子（非负整数）', (v) => Number.parseInt(v, 10))
+    .option('--aspect-ratio <ratio>', '模型原生画面比例，如 16:9、9:16、auto')
+    .option('--seed <n>', '模型随机种子（非负整数）', (v) => Number.parseInt(v, 10))
+    .option('--fps <n>', '输出帧率（仅支持该参数的模型生效）', (v) => Number.parseInt(v, 10))
+    .option('--safety-tolerance <n>', '安全容忍度（仅支持该参数的模型生效）', (v) => Number.parseInt(v, 10))
     .option('--image <url...>', '图生视频的源图像 URL，可多个')
     .option('--generate-audio <boolean>', '是否生成音频（只接受 true 或 false）', (v) => parseBooleanOption(v, 'generate-audio'))
     .option('--watermark <boolean>', '是否添加水印（只接受 true 或 false）', (v) => parseBooleanOption(v, 'watermark'))
@@ -440,7 +459,7 @@ export function registerGen(program: Command): void {
       async (
         promptParts: string[],
         opts: {
-          model?: string; seconds?: number; size?: string; resolution?: string; ratio?: string; aspectRatio?: string; seed?: number; image?: string[]; content?: string;
+          model?: string; seconds?: number; size?: string; resolution?: string; ratio?: string; aspectRatio?: string; seed?: number; fps?: number; safetyTolerance?: number; image?: string[]; content?: string;
           generateAudio?: boolean; watermark?: boolean; serviceTier?: string; priority?: number; callbackUrl?: string;
           returnLastFrame?: boolean; executionExpiresAfter?: number; safetyIdentifier?: string;
           wait?: boolean; pollInterval: number; timeout: number; out: string;
@@ -464,6 +483,8 @@ export function registerGen(program: Command): void {
         if (opts.ratio) metadata.ratio = opts.ratio;
         if (opts.aspectRatio) metadata.ratio = opts.aspectRatio;
         if (opts.seed !== undefined) metadata.seed = opts.seed;
+        if (opts.fps !== undefined) metadata.fps = opts.fps;
+        if (opts.safetyTolerance !== undefined) metadata.safety_tolerance = opts.safetyTolerance;
         if (opts.generateAudio !== undefined) metadata.generate_audio = opts.generateAudio;
         if (opts.watermark !== undefined) metadata.watermark = opts.watermark;
         if (opts.serviceTier) metadata.service_tier = opts.serviceTier;
@@ -479,6 +500,8 @@ export function registerGen(program: Command): void {
           ratio: opts.ratio,
           aspectRatio: opts.aspectRatio,
           seed: opts.seed,
+          fps: opts.fps,
+          safetyTolerance: opts.safetyTolerance,
           serviceTier: opts.serviceTier,
           priority: opts.priority,
           executionExpiresAfter: opts.executionExpiresAfter,
