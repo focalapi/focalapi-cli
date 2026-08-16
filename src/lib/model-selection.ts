@@ -53,7 +53,6 @@ const RECOMMENDED_MODELS: Record<CreativeCapability, readonly string[]> = {
     'grok-imagine-video-1.5',
     'ltx-2-5-fast',
     'flux-3',
-    'MiniMax-H3',
     'dreamina-seedance-2-0-260128',
   ],
 };

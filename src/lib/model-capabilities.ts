@@ -52,6 +52,7 @@ type VideoGenerationConstraint = {
   supportsPriority?: boolean;
   supportsSeed?: boolean;
   maxSeed?: number;
+  maxReferenceImages?: number;
   allowedFps?: number[];
   safetyTolerance?: { minimum: number; maximum: number };
 };
@@ -178,18 +179,17 @@ const SEEDANCE_RATIOS = ['adaptive', '16:9', '4:3', '1:1', '3:4', '9:16', '21:9'
 const GROK_VIDEO_ASPECT_RATIOS = ['auto', '16:9', '4:3', '3:2', '1:1', '2:3', '3:4', '9:16'];
 const KLING_VIDEO_ASPECT_RATIOS = ['16:9', '9:16', '1:1'];
 const VIDU_VIDEO_ASPECT_RATIOS = ['16:9', '9:16', '3:4', '4:3', '1:1'];
-const MINIMAX_VIDEO_RATIOS = ['16:9', '4:3', '1:1', '3:4', '9:16', '21:9', 'adaptive'];
 const FLUX_VIDEO_RATIOS = ['auto', '21:9', '2:1', '16:9', '4:3', '1:1', '3:4', '9:16'];
 
 const VIDEO_CONSTRAINTS: Record<string, VideoGenerationConstraint> = {
   'dreamina-seedance-2-0-260128': {
-    resolutions: ['480p', '720p', '1080p', '4k'], ratios: SEEDANCE_RATIOS, minSeconds: 4, maxSeconds: 15, supportsPriority: true,
+    resolutions: ['480p', '720p', '1080p', '4k'], ratios: SEEDANCE_RATIOS, minSeconds: 4, maxSeconds: 15,
   },
   'dreamina-seedance-2-0-fast-260128': {
-    resolutions: ['480p', '720p'], ratios: SEEDANCE_RATIOS, minSeconds: 4, maxSeconds: 15, supportsPriority: true,
+    resolutions: ['480p', '720p'], ratios: SEEDANCE_RATIOS, minSeconds: 4, maxSeconds: 15,
   },
-  'dreamina-seedance-2-0-mini-260615': {
-    resolutions: ['480p', '720p'], ratios: SEEDANCE_RATIOS, minSeconds: 4, maxSeconds: 15, supportsPriority: true,
+  'seed-2-0-mini-260428': {
+    resolutions: ['480p', '720p'], ratios: SEEDANCE_RATIOS, minSeconds: 4, maxSeconds: 15,
   },
   'dreamina-seedance-2-5-260628': {
     resolutions: ['480p', '720p'], ratios: SEEDANCE_RATIOS, minSeconds: 4, maxSeconds: 30,
@@ -198,36 +198,33 @@ const VIDEO_CONSTRAINTS: Record<string, VideoGenerationConstraint> = {
     resolutions: [], ratios: ['16:9', '9:16'], minSeconds: 3, maxSeconds: 10,
   },
   'grok-imagine-video': {
-    resolutions: ['480p', '720p', '1080p'], aspectRatios: GROK_VIDEO_ASPECT_RATIOS,
-    minSeconds: 1, maxSeconds: 15, supportsSeed: true, maxSeed: 2147483647,
+    resolutions: ['480p', '720p'], aspectRatios: GROK_VIDEO_ASPECT_RATIOS,
+    minSeconds: 1, maxSeconds: 15, maxReferenceImages: 1,
   },
   'grok-imagine-video-1.5': {
     resolutions: ['480p', '720p', '1080p'], aspectRatios: GROK_VIDEO_ASPECT_RATIOS,
-    minSeconds: 1, maxSeconds: 15, supportsSeed: true, maxSeed: 2147483647,
+    minSeconds: 1, maxSeconds: 15, maxReferenceImages: 7,
   },
   'kling-3.0': {
     resolutions: ['720p', '1080p', '4k'], aspectRatios: KLING_VIDEO_ASPECT_RATIOS, minSeconds: 3, maxSeconds: 15,
   },
   'viduq3-pro': {
     resolutions: ['720p', '1080p'], aspectRatios: VIDU_VIDEO_ASPECT_RATIOS,
-    minSeconds: 1, maxSeconds: 16, supportsSeed: true, maxSeed: 2147483647,
+    minSeconds: 1, maxSeconds: 16, supportsSeed: true, maxSeed: 4294967295,
   },
   'viduq3-turbo': {
     resolutions: ['720p', '1080p'], aspectRatios: VIDU_VIDEO_ASPECT_RATIOS,
-    minSeconds: 1, maxSeconds: 16, supportsSeed: true, maxSeed: 2147483647,
-  },
-  'MiniMax-H3': {
-    resolutions: ['768p', '2k'], ratios: MINIMAX_VIDEO_RATIOS, minSeconds: 5, maxSeconds: 15,
+    minSeconds: 1, maxSeconds: 16, supportsSeed: true, maxSeed: 4294967295,
   },
   'ltx-2-5-fast': {
     resolutions: ['1280x720', '720x1280', '1920x1080', '1080x1920', '2560x1440', '1440x2560', '3840x2160', '2160x3840'],
-    minSeconds: 2, maxSeconds: 20, allowedSeconds: [2, 3, 4, 5, 6, 8, 10, 12, 14, 16, 18, 20],
-    supportsSeed: true, maxSeed: 4294967295, allowedFps: [24, 25, 48, 50],
+    minSeconds: 6, maxSeconds: 20, allowedSeconds: [6, 8, 10, 12, 14, 16, 18, 20],
+    allowedFps: [24, 25, 48, 50],
   },
   'ltx-2-5-pro': {
     resolutions: ['1280x720', '720x1280', '1920x1080', '1080x1920'],
-    minSeconds: 2, maxSeconds: 10, allowedSeconds: [2, 3, 4, 5, 6, 8, 10],
-    supportsSeed: true, maxSeed: 4294967295, allowedFps: [24, 25, 50],
+    minSeconds: 6, maxSeconds: 10, allowedSeconds: [6, 8, 10],
+    allowedFps: [24, 25, 50],
   },
   'flux-3': {
     resolutions: ['hd', 'fhd'], ratios: FLUX_VIDEO_RATIOS, minSeconds: 5, maxSeconds: 20,

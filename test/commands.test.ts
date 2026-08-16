@@ -597,22 +597,26 @@ describe('gen video + task', () => {
 
     expect(await main(argv(
       'gen', 'video', '海浪', '-m', 'dreamina-seedance-2-0-260128', '--image', 'https://example.com/frame.png',
-      '--generate-audio', 'false', '--watermark', 'true', '--return-last-frame', 'true',
-      '--callback-url', 'https://example.com/callback', '--execution-expires-after', '7200',
-      '--safety-identifier', 'customer-42', '--priority', '4', '--no-wait', '--json',
+      '--generate-audio', 'false', '--callback-url', 'https://example.com/callback',
+      '--execution-expires-after', '7200', '--no-wait', '--json',
     ))).toBe(0);
     expect(capturedBody).toMatchObject({
       images: ['https://example.com/frame.png'],
       metadata: {
         generate_audio: false,
-        watermark: true,
-        return_last_frame: true,
         callback_url: 'https://example.com/callback',
         execution_expires_after: 7200,
-        safety_identifier: 'customer-42',
-        priority: 4,
       },
     });
+
+    // priority is rejected by the platform (F-8.1 channel limitation) — the
+    // CLI intercepts it locally instead of forwarding an invalid request.
+    const spy = mockFetchRouter({});
+    vi.stubGlobal('fetch', spy);
+    expect(await main(argv(
+      'gen', 'video', 'x', '-m', 'dreamina-seedance-2-0-260128', '--priority', '4', '--no-wait', '--json',
+    ))).toBe(1);
+    expect(spy).not.toHaveBeenCalled();
   });
   it('uses aspect-ratio and seed for Grok video, and accepts 30 seconds for Seedance 2.5', async () => {
     let capturedBody: Record<string, unknown> | undefined;
@@ -627,9 +631,17 @@ describe('gen video + task', () => {
     );
     expect(await main(argv(
       'gen', 'video', 'x', '-m', 'grok-imagine-video-1.5', '--seconds', '6', '--resolution', '1080p',
-      '--aspect-ratio', '16:9', '--seed', '7', '--no-wait', '--json',
+      '--aspect-ratio', '16:9', '--no-wait', '--json',
     ))).toBe(0);
-    expect(capturedBody).toMatchObject({ duration: 6, metadata: { resolution: '1080p', ratio: '16:9', seed: 7 } });
+    expect(capturedBody).toMatchObject({ duration: 6, metadata: { resolution: '1080p', ratio: '16:9' } });
+
+    // seed is rejected by the grok video contract (F-9.1) — local intercept.
+    const grokSpy = mockFetchRouter({});
+    vi.stubGlobal('fetch', grokSpy);
+    expect(await main(argv(
+      'gen', 'video', 'x', '-m', 'grok-imagine-video-1.5', '--seed', '7', '--no-wait', '--json',
+    ))).toBe(1);
+    expect(grokSpy).not.toHaveBeenCalled();
 
     vi.stubGlobal('fetch', mockFetchRouter({ '/v1/video/generations': () => ({ task_id: 'seedance-25', status: 'submitted' }) }));
     expect(await main(argv('gen', 'video', 'x', '-m', 'dreamina-seedance-2-5-260628', '--seconds', '30', '--no-wait', '--json'))).toBe(0);
@@ -684,12 +696,20 @@ describe('gen video + task', () => {
     );
     expect(await main(argv(
       'gen', 'video', 'cinematic ocean', '-m', 'ltx-2-5-fast', '--seconds', '12',
-      '--resolution', '1920x1080', '--fps', '25', '--seed', '42', '--no-wait', '--json',
+      '--resolution', '1920x1080', '--fps', '25', '--no-wait', '--json',
     ))).toBe(0);
     expect(capturedBody).toMatchObject({
       model: 'ltx-2-5-fast', duration: 12,
-      metadata: { resolution: '1920x1080', fps: 25, seed: 42 },
+      metadata: { resolution: '1920x1080', fps: 25 },
     });
+
+    // seed is rejected by the LTX contract (F-13.1) — local intercept.
+    const ltxSpy = mockFetchRouter({});
+    vi.stubGlobal('fetch', ltxSpy);
+    expect(await main(argv(
+      'gen', 'video', 'x', '-m', 'ltx-2-5-fast', '--seed', '42', '--no-wait', '--json',
+    ))).toBe(1);
+    expect(ltxSpy).not.toHaveBeenCalled();
 
     vi.stubGlobal(
       'fetch',

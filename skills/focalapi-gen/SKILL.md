@@ -34,7 +34,7 @@ focalapi gen video "<prompt>" -m <model-id> [contract-supported options] --no-wa
 - Use `--image <url...>` for image editing and reference images. Pass `--mask` only when the contract lists it.
 - Use `--negative-prompt`, `--creativity`, `--prompt-extend`, `--style-references`, and `--moodboards` only when the image contract lists the corresponding field.
 - Use `--image <url...>` for video reference images. Pass duration, resolution, aspect ratio, and audio options only as allowed by `supported_params`.
-- Use `--content '<json-array>'` for models such as MiniMax H3, LTX 2.5, and FLUX 3 when the contract requires role-aware media content. LTX also exposes `--fps`; FLUX 3 exposes `--safety-tolerance`.
+- Use `--content '<json-array>'` for models such as LTX 2.5, FLUX 3, Kling 3.0, and Vidu Q3 when the contract requires role-aware media content. LTX also exposes `--fps`; FLUX 3 exposes `--safety-tolerance`.
 - Never copy one model's `ratio`, `aspect_ratio`, `size`, or `resolution` to another model.
 - Use `gen gemini-image` only when the user explicitly selects a native Gemini image model. Continue to use the automatic `gen image` entry point for ordinary requests.
 

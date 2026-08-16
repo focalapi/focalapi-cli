@@ -50,6 +50,6 @@ Rules:
 
 ## Current verified creative families
 
-The maintained defaults currently prefer Seedream 5.0, GPT Image 2, Gemini 3.1 Image, Grok Imagine Image 2.0, Kling Image 3.0, Qwen Image 3.0, and Krea 2 for images. Video selection currently covers Seedance 2.5, Kling 3.0, Vidu Q3, Gemini Omni Flash, Grok Imagine Video 1.5, LTX 2.5, FLUX 3, and MiniMax H3.
+The maintained defaults currently prefer Seedream 5.0, GPT Image 2, Gemini 3.1 Image, Grok Imagine Image 2.0, Kling Image 3.0, Qwen Image 3.0, and Krea 2 for images. Video selection currently covers Seedance 2.5, Kling 3.0, Vidu Q3, Gemini Omni Flash, Grok Imagine Video 1.5, LTX 2.5, and FLUX 3.
 
 These names are routing context, not permission to guess a model ID. Use the exact canonical ID returned by `models resolve` or `models get`. Removed IDs, including the former Veo 3.1 preview models, must not be retried.
