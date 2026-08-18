@@ -498,8 +498,13 @@ export function validateVideoGeneration(
 ): void {
   const constraint = VIDEO_CONSTRAINTS[model.trim()];
   if (!constraint) return;
-  if (constraint.maxPromptRunes !== undefined && input.promptRunes !== undefined && input.promptRunes > constraint.maxPromptRunes) {
-    throw new ApiError('invalid_request', `${model} prompt must be at most ${constraint.maxPromptRunes} characters (received ${input.promptRunes})`);
+  if (constraint.maxPromptRunes !== undefined && input.promptRunes !== undefined) {
+    // 上游 4096 限额作用于「文本 + 参考图标注」合成 prompt（2026-08-18 生产
+    // 实证：1484 字 + 6 图也被拒，每图标注 ≈435+ 字符），按保守 500/图估算。
+    const referenceCount = input.imageCount ?? input.firstFrameCount ?? 0;
+    if (input.promptRunes + 500 * referenceCount > constraint.maxPromptRunes) {
+      throw new ApiError('invalid_request', `${model} prompt budget exceeded: upstream counts prompt text plus ~500 characters per reference image against its ${constraint.maxPromptRunes}-character limit (received ${input.promptRunes} characters of text + ${referenceCount} reference images)`);
+    }
   }
   if ((input.imageCount ?? 0) > 0 && (input.firstFrameCount ?? 0) > 0) {
     throw new ApiError('invalid_request', `${model}: --image and --first-frame are mutually exclusive (reference-to-video vs image-to-video)`);

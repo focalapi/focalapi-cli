@@ -930,6 +930,11 @@ describe('gen video + task', () => {
 
     vi.stubGlobal('fetch', mockFetchRouter({ '/v1/video/generations': () => ({ task_id: 'prompt-ok', status: 'submitted' }) }));
     expect(await main(argv('gen', 'video', 'a'.repeat(4096), '-m', 'grok-imagine-video-1.5', '--no-wait', '--json'))).toBe(0);
+
+    // 合成预算：1484 字 + 6 张参考图超限（2026-08-18 生产实证复现）。
+    expect(await main(argv('gen', 'video', 'a'.repeat(1484), '-m', 'grok-imagine-video-1.5',
+      '--image', ...Array.from({ length: 6 }, (_, i) => `https://example.com/${i}.png`), '--no-wait', '--json'))).toBe(1);
+    expect(ctx.stdout()).toContain('6 reference images');
   });
 
   it('accepts --duration as the --seconds alias and rejects conflicting duplicates', async () => {
