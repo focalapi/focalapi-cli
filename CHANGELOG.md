@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.4.1 - 2026-08-18
+
+- Added `@file` syntax for local reference media on all gen paths (`--image @C:/path/ref.jpg`): the file is read and inlined as a data URI with per-file 8MB and per-command 12MB guards — local files no longer require manual hosting.
+- Bare local paths (e.g., `C:/...` without `@`) are intercepted locally with actionable guidance to add the `@` prefix or host the file, instead of round-tripping to the server's 400.
+- Added `--content @file.json` and `--content -` (stdin) for gen video, bypassing the Windows ~32KB argv limit for multi-image content arrays; capped at 64MB.
+- Added `task download --direct`: fetches the task's upstream artifact URL directly (CDN/edge typically beats the cross-border gateway hop; measured 328KB/s client-side vs 26MB/s server-local) and falls back to the gateway proxy automatically.
+- Added grok video prompt budget validation: the upstream 4096-character limit applies to the composite of text plus ~500 characters per reference image — the CLI mirrors the gateway's calibrated gate and rejects locally before submission.
+
 ## 0.4.0 - 2026-08-18
 
 - Added `task status --wait [--download]`: built-in bounded polling with elapsed-time reporting and an optional auto-download, so agents never need to write their own poller (the audited agent session's custom script crashed on the Windows `.cmd` shim and stalled blind).
