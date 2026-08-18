@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.4.0 - 2026-08-18
+
+- Added `task status --wait [--download]`: built-in bounded polling with elapsed-time reporting and an optional auto-download, so agents never need to write their own poller (the audited agent session's custom script crashed on the Windows `.cmd` shim and stalled blind).
+- Added `task list [--status] [--action] [--limit] [--offset]` backed by `GET /v1/tasks`, so a caller that lost a submission output can reconcile recent tasks instead of resubmitting and double-charging.
+- Added `--idempotency-key` to `gen video` and async `gen image`: same-key retries replay the original task server-side without a second charge. Keys are auto-generated when omitted, breadcrumbed on stderr (`idempotency_key=...`), and the server's `idempotent_replay` marker is surfaced in both JSON output and stderr.
+- Aligned `task download --json` output with `gen image` by exposing `files[]` alongside the legacy `file`.
+- Added a stderr warning for double-encoded reference URLs (`%25XX`) before submission — the top cause of 403 `invalid_reference_url` from presigned URLs.
+
 ## 0.3.1 - 2026-08-18
 
 - Added `--duration` as an alias of `--seconds` on `gen video` so the API contract field name works directly; conflicting values are rejected locally.
