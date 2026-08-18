@@ -63,6 +63,16 @@ interface GeminiOmniInteractionResponse {
 	}>;
 }
 
+// 签名 URL（如 TOS 预签名）被调用方二次编码是 403 invalid_reference_url 的
+// 最常见成因（demo03 实证）；只警示不拦截——合法 URL 极少含 %25XX 连片。
+function warnDoubleEncodedReferenceURLs(label: string, urls: Array<string | undefined>): void {
+  for (const url of urls) {
+    if (url && /%25[0-9a-f]{2}/i.test(url)) {
+      info(`警告：${label} 的 URL 疑似被二次编码（包含 %25XX）：${url.slice(0, 100)} —— 预签名 URL 必须原样传递，否则上游会返回 403 invalid_reference_url`);
+    }
+  }
+}
+
 function clampInt(value: number, min: number, max: number, name: string): number {
   if (!Number.isInteger(value) || value < min || value > max) {
     throw new ApiError('invalid_request', `${name} 必须是 ${min}–${max} 的整数（收到：${value}）`);
@@ -268,6 +278,7 @@ export function registerGen(program: Command): void {
       if (opts.responseFormat) body.response_format = opts.responseFormat;
 
       const idempotencyKey = opts.wait === false ? resolveIdempotencyKey(opts.idempotencyKey) : undefined;
+      warnDoubleEncodedReferenceURLs('--image', opts.image ?? []);
       const res = await withProgress(opts.wait === false ? '正在提交图像任务' : '正在生成图像', () => request<{ created?: number; data?: ImageResultItem[]; id?: string; status?: string; idempotent_replay?: boolean }>({
         baseUrl: auth.baseUrl,
         path: '/v1/images/generations',
@@ -542,6 +553,7 @@ export function registerGen(program: Command): void {
         if (Object.keys(metadata).length > 0) body.metadata = metadata;
 
         const idempotencyKey = resolveIdempotencyKey(opts.idempotencyKey);
+        warnDoubleEncodedReferenceURLs('--image/--first-frame', [...(opts.image ?? []), opts.firstFrame]);
         const created = await withProgress('正在提交视频任务', () => request<{ task_id?: string; id?: string; status?: string; idempotent_replay?: boolean }>({
           baseUrl: auth.baseUrl,
           path: '/v1/video/generations',
