@@ -50,6 +50,8 @@ focalapi task download <task-id> -o ./focalapi-out --json
 
 `pending` and `running` are not failures. Keep checking the same `task_id` and never resubmit generation. On failure, read the structured `error.code` and `hint`, and fix only the explicit problem instead of rotating models blindly.
 
+Never resubmit after an output-parsing failure on your side. If your own pipeline fails to parse a submission command's stdout JSON, the task was almost certainly created and charged: recover the `task_id` from the command's stderr breadcrumb line (`task_id=...`) and continue with `task status`. Resubmitting a request whose outcome is unknown duplicates the charge.
+
 Two transient outcomes need no parameter changes:
 
 - `capacity_exhausted` (HTTP 503): the platform queue is full. Retry the same command after roughly 10 seconds; do not switch models or shrink the request.

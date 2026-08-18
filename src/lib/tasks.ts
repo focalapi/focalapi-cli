@@ -92,6 +92,12 @@ export async function cancelTask(baseUrl: string, apiKey: string, taskId: string
           hint: '运行 focalapi task status ' + taskId + ' 查看结果；成功后可下载产物。',
         });
       }
+      if (code === 'task_not_found') {
+        throw new ApiError('task_not_found', `任务 ${taskId} 不存在或不属于当前 Key`, {
+          status: err.status,
+          hint: 'task_id 区分大小写且混有小写 l / 数字 1 / 大写 I，必须逐字复制；请回查提交输出后再试。',
+        });
+      }
       if (code === 'task_cancel_incomplete') {
         throw new ApiError('task_cancel_incomplete', `任务 ${taskId} 已取消但清理未完成`, {
           status: err.status,

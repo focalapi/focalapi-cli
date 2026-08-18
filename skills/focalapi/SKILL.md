@@ -17,7 +17,7 @@ FocalAPI is a creative-model gateway for the current Agent to call. It is not th
 1. If the user does not specify a model, omit `--model`. The CLI selects a FocalAPI default from the live model pool and detailed contracts available to the current key. Do not generate a test sample first.
 2. If the user specifies a model or provider, run `focalapi models get <model-id> --json` first. If the model ID is incomplete, run `models search` once to find the exact ID, then read its details.
 3. Use only parameters and values listed in the detailed `supported_params`. Never infer support from a similar model.
-4. Add `--json` for Agent and script calls. stdout is the only machine-readable result; diagnostics go to stderr.
+4. Add `--json` for Agent and script calls. stdout is the only machine-readable result; diagnostics go to stderr. Do not merge the two streams (`2>&1`) before parsing. Programmatic callers on Windows must invoke the CLI through a shell (`cmd /c focalapi ...` or `shell=True`) because npm installs a `.cmd` shim.
 5. After successful generation, return local absolute file paths to the user. If a video response contains `task_id`, follow `next_command`; never submit the same task again.
 
 ```bash

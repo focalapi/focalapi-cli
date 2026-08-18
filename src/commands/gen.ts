@@ -269,6 +269,8 @@ export function registerGen(program: Command): void {
         if (!taskId) {
           throw new ApiError('bad_response', '异步图像任务响应中未找到 task_id', { body: res });
         }
+        // stderr breadcrumb: see gen video --no-wait for the duplicate-charge rationale.
+        info(`task_id=${taskId}`);
         if (g.json) {
           printJson({ model, task_id: taskId, status: res.status ?? 'queued', submitted: true, next_command: `focalapi task status ${taskId} --json` });
         } else {
@@ -435,7 +437,8 @@ export function registerGen(program: Command): void {
     .description('生成视频（省略 --model 时自动选择当前可用默认模型）')
     .argument('<prompt...>', '提示词')
     .option('-m, --model <model>', '视频模型 ID；省略时由 focalapi 自动选择')
-    .option('--seconds <n>', '时长秒数；精确范围运行 focalapi models get <model> 查看', (v) => Number.parseInt(v, 10))
+    .option('--seconds <n>', '时长秒数；--duration 为同义别名。精确范围运行 focalapi models get <model> 查看', (v) => Number.parseInt(v, 10))
+    .option('--duration <n>', '时长秒数（--seconds 的别名，与 API 契约字段同名）', (v) => Number.parseInt(v, 10))
     .option('--size <size>', '分辨率，如 1280x720')
     .option('--resolution <resolution>', '原生输出分辨率，如 480p、720p、1080p、4k')
     .option('--ratio <ratio>', '原生宽高比，如 16:9、9:16、adaptive')
@@ -462,7 +465,7 @@ export function registerGen(program: Command): void {
       async (
         promptParts: string[],
         opts: {
-          model?: string; seconds?: number; size?: string; resolution?: string; ratio?: string; aspectRatio?: string; seed?: number; fps?: number; safetyTolerance?: number; image?: string[]; firstFrame?: string; content?: string;
+          model?: string; seconds?: number; duration?: number; size?: string; resolution?: string; ratio?: string; aspectRatio?: string; seed?: number; fps?: number; safetyTolerance?: number; image?: string[]; firstFrame?: string; content?: string;
           generateAudio?: boolean; watermark?: boolean; serviceTier?: string; priority?: number; callbackUrl?: string;
           returnLastFrame?: boolean; executionExpiresAfter?: number; safetyIdentifier?: string;
           wait?: boolean; pollInterval: number; timeout: number; out: string;
@@ -473,12 +476,16 @@ export function registerGen(program: Command): void {
         const auth = resolveAuth(g);
         const model = opts.model ?? (await resolveCreativeModel(auth, 'video')).model.id;
         if (!opts.model && !g.json) info(`已自动选择视频模型：${model}`);
+        if (opts.seconds !== undefined && opts.duration !== undefined && opts.seconds !== opts.duration) {
+          throw new ApiError('invalid_request', `--seconds 与 --duration 是同一参数，只需传一个（收到 ${opts.seconds} 和 ${opts.duration}）`);
+        }
+        const seconds = opts.seconds ?? opts.duration;
         const body: Record<string, unknown> = { model, prompt: promptParts.join(' ') };
         const metadata: Record<string, unknown> = {};
-        if (opts.seconds !== undefined) {
+        if (seconds !== undefined) {
           // The FocalAPI task DTO represents seconds as a string to match Kling and Seedance upstream formats.
-          const seconds = clampInt(opts.seconds, 1, MAX_TASK_DURATION_SECONDS, 'seconds');
-          body.duration = seconds;
+          const secondsValue = clampInt(seconds, 1, MAX_TASK_DURATION_SECONDS, 'seconds');
+          body.duration = secondsValue;
         }
         if (opts.size) body.size = opts.size;
         if (opts.image) body.images = opts.image;
@@ -499,7 +506,7 @@ export function registerGen(program: Command): void {
         if (opts.safetyIdentifier) metadata.safety_identifier = opts.safetyIdentifier;
         if (opts.content) metadata.content = parseJsonArray(opts.content, 'content');
         validateVideoGeneration(model, {
-          seconds: opts.seconds,
+          seconds,
           resolution: opts.resolution,
           ratio: opts.ratio,
           aspectRatio: opts.aspectRatio,
@@ -530,6 +537,9 @@ export function registerGen(program: Command): void {
         }
 
         if (opts.wait === false) {
+          // stderr breadcrumb: a caller whose stdout JSON parsing fails can still
+          // recover the task_id instead of resubmitting (duplicate charge).
+          info(`task_id=${taskId}`);
           if (g.json) {
             printJson({ model, task_id: taskId, submitted: true, next_command: `focalapi task status ${taskId} --json` });
           } else {

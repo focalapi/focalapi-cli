@@ -848,6 +848,50 @@ describe('gen video + task', () => {
     expect(spy).not.toHaveBeenCalled();
   });
 
+  it('accepts --duration as the --seconds alias and rejects conflicting duplicates', async () => {
+    let capturedBody: Record<string, unknown> | undefined;
+    vi.stubGlobal(
+      'fetch',
+      mockFetchRouter({
+        '/v1/video/generations': (init) => {
+          capturedBody = JSON.parse(String(init?.body)) as Record<string, unknown>;
+          return { task_id: 'alias-1', status: 'submitted' };
+        },
+      }),
+    );
+    expect(await main(argv('gen', 'video', 'x', '-m', 'grok-imagine-video-1.5', '--duration', '6', '--no-wait', '--json'))).toBe(0);
+    expect(capturedBody?.duration).toBe(6);
+
+    const spy = mockFetchRouter({});
+    vi.stubGlobal('fetch', spy);
+    expect(await main(argv('gen', 'video', 'x', '-m', 'grok-imagine-video-1.5', '--seconds', '5', '--duration', '6', '--no-wait', '--json'))).toBe(1);
+    expect(spy).not.toHaveBeenCalled();
+  });
+
+  it('emits a stderr task_id breadcrumb so callers can recover after stdout parse failures', async () => {
+    vi.stubGlobal(
+      'fetch',
+      mockFetchRouter({ '/v1/video/generations': () => ({ task_id: 'crumb-1', status: 'submitted' }) }),
+    );
+    expect(await main(argv('gen', 'video', 'x', '-m', 'grok-imagine-video-1.5', '--no-wait', '--json'))).toBe(0);
+    expect(ctx.takeStdout()).toContain('"task_id": "crumb-1"');
+    expect(ctx.stderr()).toContain('task_id=crumb-1');
+  });
+
+  it('task status 404 explains case-sensitive ID transcription instead of failing silently', async () => {
+    vi.stubGlobal(
+      'fetch',
+      mockFetchRouter({
+        '/v1/video/generations/task-typo': () => new Response(JSON.stringify({ error: { message: 'task not found' } }), { status: 404 }),
+        '/v1/images/generations/task-typo': () => new Response(JSON.stringify({ error: { message: 'task not found' } }), { status: 404 }),
+      }),
+    );
+    expect(await main(argv('task', 'status', 'task-typo', '--json'))).toBe(1);
+    const out = parseStdoutJson() as { error: { code: string; hint?: string } };
+    expect(out.error.code).toBe('model_not_found');
+    expect(out.error.hint).toContain('逐字复制');
+  });
+
   it('maps LTX and FLUX 3 parameters and validates their live ranges', async () => {
     let capturedBody: Record<string, unknown> | undefined;
     vi.stubGlobal(

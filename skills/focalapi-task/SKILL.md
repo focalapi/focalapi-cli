@@ -24,6 +24,8 @@ focalapi task cancel <task-id> --json
 - `cancelled`: the task was stopped; a cancelled queued task is refunded. Do not download or resubmit unless the user asks for a new attempt.
 - `unknown`: preserve the raw response and run `focalapi doctor --json`; never fabricate a success state.
 
+Task IDs are case-sensitive and mix `l`/`1`/`I` and `O`/`0`. Copy them exactly from the submission output — stdout JSON or the stderr `task_id=` breadcrumb — instead of retyping.
+
 `task cancel` only works while a task is still queued (`pending`). A 409 `task_already_running` means generation already started and cannot be stopped — keep tracking with `task status`. Cancellation failures return explicit codes (`task_already_finished`, `task_cancel_failed`); follow `error.hint` instead of retrying blindly.
 
 Polling must be bounded. When the user does not ask for blocking wait behavior, report the current status and `task_id`.
