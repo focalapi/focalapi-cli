@@ -5,7 +5,7 @@
 import { Command } from 'commander';
 import { ApiError } from '../lib/errors.js';
 import { resolveAuth } from '../lib/config.js';
-import { cancelTask, downloadTaskContent, fetchTask, listTasks, pollTask } from '../lib/tasks.js';
+import { cancelTask, downloadTaskArtifact, fetchTask, listTasks, pollTask } from '../lib/tasks.js';
 import { info, printJson, printTable } from '../lib/output.js';
 import type { GlobalOpts } from '../cli.js';
 
@@ -62,7 +62,7 @@ export function registerTask(program: Command): void {
         const elapsed = taskAgeSeconds(info_.createdAt);
         let file: string | undefined;
         if (opts.download && info_.status === 'success') {
-          file = await downloadTaskContent(auth.baseUrl, auth.apiKey, taskId, opts.out);
+          file = (await downloadTaskArtifact(auth.baseUrl, auth.apiKey, taskId, opts.out)).file;
         }
         if (g.json) {
           printJson({
@@ -146,18 +146,19 @@ export function registerTask(program: Command): void {
 
   task
     .command('download')
-    .description('下载任务产物（经 focalapi 内容代理，无需上游签名 URL）')
+    .description('下载任务产物（默认经 focalapi 内容代理；--direct 优先直连产物 URL，失败自动回退代理）')
     .argument('<task_id>', '任务 ID')
     .option('-o, --out <dir>', '输出目录', 'focalapi-out')
-    .action(async (taskId: string, opts: { out: string }, cmd: Command) => {
+    .option('--direct', '优先直连任务的产物 URL 下载（跨境链路下通常显著快于代理），失败自动回退')
+    .action(async (taskId: string, opts: { out: string; direct?: boolean }, cmd: Command) => {
       const g = cmd.optsWithGlobals() as GlobalOpts;
       const auth = resolveAuth(g);
-      const filePath = await downloadTaskContent(auth.baseUrl, auth.apiKey, taskId, opts.out);
+      const { file: filePath, source } = await downloadTaskArtifact(auth.baseUrl, auth.apiKey, taskId, opts.out, { direct: opts.direct });
       if (g.json) {
         // files（复数）与 gen image 的输出对齐；file 保留向后兼容。
-        printJson({ task_id: taskId, file: filePath, files: [filePath] });
+        printJson({ task_id: taskId, file: filePath, files: [filePath], source });
       } else {
-        info(`✓ ${filePath}`);
+        info(`✓ ${filePath}${source === 'upstream' ? '（直连产物 URL）' : ''}`);
       }
     });
 }

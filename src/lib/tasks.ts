@@ -242,6 +242,62 @@ const EXT_BY_CONTENT_TYPE: Record<string, string> = {
   'audio/wav': '.wav',
 };
 
+/** Extract the task's upstream artifact URL from any response envelope. */
+export function extractTaskArtifactURL(raw: unknown): string | undefined {
+  if (!raw || typeof raw !== 'object') return undefined;
+  const obj = raw as Record<string, unknown>;
+  const data = obj.data as Record<string, unknown> | undefined;
+  const candidates = [obj.url, data?.url, (data?.data as Record<string, unknown> | undefined)?.url, (data?.data as Record<string, unknown> | undefined)?.video_url];
+  for (const candidate of candidates) {
+    if (typeof candidate === 'string' && /^https?:\/\//.test(candidate)) return candidate;
+  }
+  return undefined;
+}
+
+/**
+ * Download a task artifact from its upstream URL directly (CDN/edge usually
+ * beats the cross-border gateway hop), falling back to the gateway proxy.
+ * Returns the file path and which channel was used.
+ */
+export async function downloadTaskArtifact(
+  baseUrl: string,
+  apiKey: string,
+  taskId: string,
+  outDir: string,
+  opts?: { direct?: boolean; filenameBase?: string },
+): Promise<{ file: string; source: 'upstream' | 'proxy' }> {
+  let upstreamURL: string | undefined;
+  if (opts?.direct) {
+    const info = await fetchTask(baseUrl, apiKey, taskId);
+    upstreamURL = extractTaskArtifactURL(info.raw);
+    if (upstreamURL) {
+      try {
+        const res = await fetch(upstreamURL, {
+          signal: AbortSignal.timeout(600_000),
+        });
+        if (res.ok && res.body) {
+          const contentType = res.headers.get('content-type')?.split(';')[0]?.trim() ?? '';
+          const ext = EXT_BY_CONTENT_TYPE[contentType] ?? extFromURL(upstreamURL) ?? '.bin';
+          const dir = resolve(outDir);
+          await mkdir(dir, { recursive: true });
+          const filePath = join(dir, `${opts?.filenameBase ?? `task-${taskId}`}${ext}`);
+          await pipeline(Readable.fromWeb(res.body as import('node:stream/web').ReadableStream), createWriteStream(filePath));
+          return { file: filePath, source: 'upstream' };
+        }
+      } catch {
+        // 落回网关代理：直连失败（链接过期/网络不可达）不阻断下载。
+      }
+    }
+  }
+  const file = await downloadTaskContent(baseUrl, apiKey, taskId, outDir, opts?.filenameBase);
+  return { file, source: 'proxy' };
+}
+
+function extFromURL(url: string): string | undefined {
+  const match = /\.(mp4|webm|png|jpe?g|webp|mp3|wav)(?:[?#]|$)/i.exec(url);
+  return match ? (match[1]!.toLowerCase() === 'jpeg' ? '.jpg' : `.${match[1]!.toLowerCase()}`) : undefined;
+}
+
 /** Download a task artifact through the TokenAuth content proxy and return its absolute path. */
 export async function downloadTaskContent(
   baseUrl: string,

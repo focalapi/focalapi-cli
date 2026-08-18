@@ -524,6 +524,63 @@ describe('task cancel + capacity signal', () => {
     expect(out.error.hint).toContain('focalapi task status task-running');
   });
 
+  it('gen video --content accepts a @file payload beyond argv limits', async () => {
+    let capturedBody: Record<string, unknown> | undefined;
+    vi.stubGlobal(
+      'fetch',
+      mockFetchRouter({
+        '/v1/video/generations': (init) => {
+          capturedBody = JSON.parse(String(init?.body)) as Record<string, unknown>;
+          return { task_id: 'content-file-1', status: 'submitted' };
+        },
+      }),
+    );
+    const contentPath = join(ctx.homeDir, 'content.json');
+    writeFileSync(contentPath, JSON.stringify([{ type: 'text', text: 'from file' }, { type: 'image_url', image_url: { url: 'data:image/png;base64,ZmFrZQ==' } }]));
+    expect(await main(argv('gen', 'video', 'x', '-m', 'grok-imagine-video-1.5', '--content', `@${contentPath}`, '--no-wait', '--json'))).toBe(0);
+    expect((capturedBody?.metadata as Record<string, unknown>).content).toEqual([
+      { type: 'text', text: 'from file' },
+      { type: 'image_url', image_url: { url: 'data:image/png;base64,ZmFrZQ==' } },
+    ]);
+
+    const spy = mockFetchRouter({});
+    vi.stubGlobal('fetch', spy);
+    expect(await main(argv('gen', 'video', 'x', '-m', 'grok-imagine-video-1.5', '--content', '@/missing/content.json', '--no-wait', '--json'))).toBe(1);
+    expect(spy).not.toHaveBeenCalled();
+  });
+
+  it('task download --direct prefers the upstream URL and falls back to the proxy', async () => {
+    const mp4 = 'direct-video-bytes';
+    const upstream = 'https://cdn.example.com/artifacts/task-dl-2.mp4';
+    vi.stubGlobal(
+      'fetch',
+      mockFetchRouter({
+        '/v1/video/generations/task-dl-2': () => ({ task_id: 'task-dl-2', status: 'SUCCESS', url: upstream }),
+        [upstream]: () => new Response(mp4, { status: 200, headers: { 'content-type': 'video/mp4' } }),
+        '/v1/videos/task-dl-2/content': () => new Response('proxy-fallback-bytes', { status: 200, headers: { 'content-type': 'video/mp4' } }),
+      }),
+    );
+    const outDir = join(ctx.homeDir, 'dl-direct');
+    expect(await main(argv('task', 'download', 'task-dl-2', '--direct', '-o', outDir, '--json'))).toBe(0);
+    let out = parseStdoutJson() as { file: string; source: string };
+    expect(out.source).toBe('upstream');
+    expect(readFileSync(out.file).toString()).toBe('direct-video-bytes');
+
+    // 直连 404 时回退代理。
+    vi.stubGlobal(
+      'fetch',
+      mockFetchRouter({
+        '/v1/video/generations/task-dl-3': () => ({ task_id: 'task-dl-3', status: 'SUCCESS', url: 'https://cdn.example.com/expired.mp4' }),
+        'https://cdn.example.com/expired.mp4': () => new Response('gone', { status: 404 }),
+        '/v1/videos/task-dl-3/content': () => new Response('proxy-fallback-bytes', { status: 200, headers: { 'content-type': 'video/mp4' } }),
+      }),
+    );
+    expect(await main(argv('task', 'download', 'task-dl-3', '--direct', '-o', outDir, '--json'))).toBe(0);
+    out = parseStdoutJson() as { file: string; source: string };
+    expect(out.source).toBe('proxy');
+    expect(readFileSync(out.file).toString()).toBe('proxy-fallback-bytes');
+  });
+
   it('task download exposes both file and files for parser compatibility', async () => {
     const png = Buffer.from('download-bytes').toString('base64');
     vi.stubGlobal(
@@ -1001,9 +1058,9 @@ describe('task list + wait + idempotency key', () => {
     const oversized = join(ctx.homeDir, 'big.png');
     writeFileSync(oversized, Buffer.alloc(8 * 1024 * 1024 + 1));
     expect(await main(argv('gen', 'video', 'x', '-m', 'grok-imagine-video-1.5', '--image', `@${oversized}`, '--no-wait', '--json'))).toBe(1);
-    // 裸本地路径（无 @ 前缀）本地拦截并给出加 @ 的指引。
+    // 裸本地路径（无 @ 前缀）本地拦截并给出加 @ 的指引（--json 模式错误与提示都走 stdout）。
     expect(await main(argv('gen', 'video', 'x', '-m', 'grok-imagine-video-1.5', '--image', 'C:/Users/x/ref.png', '--no-wait', '--json'))).toBe(1);
-    expect(ctx.stderr()).toContain('@C:/imgs/ref.png');
+    expect(ctx.stdout()).toContain('@C:/imgs/ref.png');
     expect(spy).not.toHaveBeenCalled();
   });
 

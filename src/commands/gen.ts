@@ -153,6 +153,37 @@ function parseJsonArray(raw: string, option: string): unknown[] {
   }
 }
 
+// --content 支持三种来源：内联 JSON、@文件（Windows argv ~32KB 上限，多图
+// base64 必须走文件）、- （stdin）。上限 64MB，对齐网关 128MB 请求体。
+const MAX_CONTENT_FILE_BYTES = 64 * 1024 * 1024;
+
+async function readContentArgument(raw: string): Promise<string> {
+  if (raw === '-') {
+    const chunks: Buffer[] = [];
+    for await (const chunk of process.stdin) {
+      chunks.push(Buffer.from(chunk));
+      if (Buffer.concat(chunks).byteLength > MAX_CONTENT_FILE_BYTES) {
+        throw new ApiError('invalid_request', '--content stdin 输入超过 64MB 上限');
+      }
+    }
+    return Buffer.concat(chunks).toString('utf8');
+  }
+  if (raw.startsWith('@')) {
+    const path = raw.slice(1);
+    let content: Buffer;
+    try {
+      content = await readFile(path);
+    } catch (err) {
+      throw new ApiError('invalid_request', `读取 --content 文件失败 @${path}：${(err as Error).message}`);
+    }
+    if (content.byteLength > MAX_CONTENT_FILE_BYTES) {
+      throw new ApiError('invalid_request', `--content 文件 ${(content.byteLength / 1048576).toFixed(1)}MB 超过 64MB 上限`);
+    }
+    return content.toString('utf8');
+  }
+  return raw;
+}
+
 // 本地参考媒体：`--image @C:/path/x.jpg` 读文件内联为 data URI。大小护栏
 // 防止把请求体撑爆（base64 再膨胀 33%）；更大的图/更多图请先托管成 URL
 // （生产实证：本地路径直接传入会得到 400 invalid_reference_url 指引）。
@@ -553,7 +584,7 @@ export function registerGen(program: Command): void {
     .option('--poll-interval <ms>', '轮询间隔毫秒', (v) => Number.parseInt(v, 10), 5_000)
     .option('--timeout <minutes>', '最长等待分钟', (v) => Number.parseInt(v, 10), 30)
     .option('-o, --out <dir>', '输出目录', DEFAULT_OUT_DIR)
-    .option('--content <json>', 'Ark-compatible content JSON array; overrides prompt/image facade fields')
+    .option('--content <json>', 'Ark content JSON 数组；支持内联 JSON、@文件路径（多图 base64 必须走文件）或 - （stdin）；覆盖 prompt/image 门面字段')
     .action(
       async (
         promptParts: string[],
@@ -599,7 +630,7 @@ export function registerGen(program: Command): void {
         if (opts.returnLastFrame !== undefined) metadata.return_last_frame = opts.returnLastFrame;
         if (opts.executionExpiresAfter !== undefined) metadata.execution_expires_after = opts.executionExpiresAfter;
         if (opts.safetyIdentifier) metadata.safety_identifier = opts.safetyIdentifier;
-        if (opts.content) metadata.content = parseJsonArray(opts.content, 'content');
+        if (opts.content) metadata.content = parseJsonArray(await readContentArgument(opts.content), 'content');
         validateVideoGeneration(model, {
           seconds,
           resolution: opts.resolution,
