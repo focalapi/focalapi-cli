@@ -65,7 +65,23 @@ export interface TaskInfo {
   status: TaskStatus;
   rawStatus: string;
   progress?: number;
+  createdAt?: number;
   raw: unknown;
+}
+
+/** Extract the task creation timestamp (unix seconds) from either response envelope. */
+function extractCreatedAt(raw: unknown): number | undefined {
+  if (!raw || typeof raw !== 'object') return undefined;
+  const obj = raw as Record<string, unknown>;
+  const candidates = [obj.created_at, (obj.data as Record<string, unknown> | undefined)?.created_at];
+  for (const candidate of candidates) {
+    if (typeof candidate === 'number' && candidate > 0) return candidate;
+    if (typeof candidate === 'string') {
+      const parsed = Number.parseInt(candidate, 10);
+      if (Number.isFinite(parsed) && parsed > 0) return parsed;
+    }
+  }
+  return undefined;
 }
 
 /** Cancel a queued task via DELETE /v1/video/generations/:task_id. Only queued tasks are cancellable. */
@@ -132,8 +148,40 @@ export async function fetchTask(baseUrl: string, apiKey: string, taskId: string)
     status: normalizeTaskStatus(rawStatus),
     rawStatus,
     progress: extractProgress(raw),
+    createdAt: extractCreatedAt(raw),
     raw,
   };
+}
+
+export interface TaskListItem {
+  task_id: string;
+  model?: string;
+  action?: string;
+  status?: string;
+  progress?: number;
+  quota?: number;
+  created_at?: number;
+  updated_at?: number;
+}
+
+/** List the caller's recent tasks for reconciliation (GET /v1/tasks). */
+export async function listTasks(
+  baseUrl: string,
+  apiKey: string,
+  opts?: { status?: string; action?: string; limit?: number; offset?: number },
+): Promise<TaskListItem[]> {
+  const raw = await request<{ data?: TaskListItem[] }>({
+    baseUrl,
+    path: '/v1/tasks',
+    apiKey,
+    query: {
+      status: opts?.status,
+      action: opts?.action,
+      limit: opts?.limit,
+      offset: opts?.offset,
+    },
+  });
+  return raw.data ?? [];
 }
 
 export interface PollOptions {
@@ -177,7 +225,7 @@ export async function pollTask(
     }
     if (Date.now() > deadline) {
       throw new ApiError('timeout', `任务 ${taskId} 等待超时（${Math.round(timeoutMs / 60000)} 分钟）`, {
-        hint: `可稍后运行 focalapi task status ${taskId} 查看，或 focalapi task download ${taskId} 续取产物。`,
+        hint: `可运行 focalapi task status ${taskId} --wait 继续等待，或 focalapi task status ${taskId} 查看当前状态。`,
       });
     }
     await new Promise((r) => setTimeout(r, intervalMs));

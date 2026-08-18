@@ -11,6 +11,7 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { pipeline } from 'node:stream/promises';
 import { Readable } from 'node:stream';
+import { randomUUID } from 'node:crypto';
 import { Command } from 'commander';
 import { ApiError } from '../lib/errors.js';
 import { resolveAuth } from '../lib/config.js';
@@ -24,6 +25,15 @@ import type { GlobalOpts } from '../cli.js';
 const MAX_IMAGE_N = 128;
 const MAX_TASK_DURATION_SECONDS = 3600;
 const DEFAULT_OUT_DIR = 'focalapi-out';
+
+// 与服务端一致的幂等键约束（service/task_idempotency.go）。
+function resolveIdempotencyKey(provided?: string): string {
+  const key = provided?.trim() || randomUUID();
+  if (!/^[\x21-\x7e]{8,128}$/.test(key)) {
+    throw new ApiError('invalid_request', '--idempotency-key 必须是 8–128 个可打印 ASCII 字符（收到：' + provided + '）');
+  }
+  return key;
+}
 
 interface ImageResultItem {
   url?: string;
@@ -205,8 +215,9 @@ export function registerGen(program: Command): void {
     .option('--response-format <format>', '图像响应格式：url 或 b64_json')
     .option('--n <count>', '张数（1–128）', (v) => Number.parseInt(v, 10), 1)
     .option('--no-wait', '提交后立即返回 task_id，不等待图像生成完成')
+    .option('--idempotency-key <key>', '幂等键（8–128 个可打印 ASCII 字符）。同一 key 的重复提交拿回原任务而不重复计费；省略时自动生成。重试不确定的提交时务必复用原 key')
     .option('-o, --out <dir>', '输出目录', DEFAULT_OUT_DIR)
-    .action(async (promptParts: string[], opts: { model?: string; size?: string; aspectRatio?: string; resolution?: string; seed?: number; quality?: string; background?: string; negativePrompt?: string; creativity?: string; promptExtend?: boolean; styleReferences?: string; moodboards?: string; watermark?: boolean; outputFormat?: string; optimizePrompt?: string; image?: string[]; mask?: string; responseFormat?: string; n: number; wait?: boolean; out: string }, cmd: Command) => {
+    .action(async (promptParts: string[], opts: { model?: string; size?: string; aspectRatio?: string; resolution?: string; seed?: number; quality?: string; background?: string; negativePrompt?: string; creativity?: string; promptExtend?: boolean; styleReferences?: string; moodboards?: string; watermark?: boolean; outputFormat?: string; optimizePrompt?: string; image?: string[]; mask?: string; responseFormat?: string; n: number; idempotencyKey?: string; wait?: boolean; out: string }, cmd: Command) => {
       const g = cmd.optsWithGlobals() as GlobalOpts;
       const auth = resolveAuth(g);
       const model = opts.model ?? (await resolveCreativeModel(auth, 'image')).model.id;
@@ -256,12 +267,16 @@ export function registerGen(program: Command): void {
       if (opts.mask) body.mask = opts.mask;
       if (opts.responseFormat) body.response_format = opts.responseFormat;
 
-      const res = await withProgress(opts.wait === false ? '正在提交图像任务' : '正在生成图像', () => request<{ created?: number; data?: ImageResultItem[]; id?: string; status?: string }>({
+      const idempotencyKey = opts.wait === false ? resolveIdempotencyKey(opts.idempotencyKey) : undefined;
+      const res = await withProgress(opts.wait === false ? '正在提交图像任务' : '正在生成图像', () => request<{ created?: number; data?: ImageResultItem[]; id?: string; status?: string; idempotent_replay?: boolean }>({
         baseUrl: auth.baseUrl,
         path: '/v1/images/generations',
         apiKey: auth.apiKey,
         body,
-        headers: opts.wait === false ? { Prefer: 'respond-async' } : undefined,
+        headers: {
+          ...(opts.wait === false ? { Prefer: 'respond-async' } : {}),
+          ...(idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : {}),
+        },
         timeoutMs: 600_000,
       }));
       if (opts.wait === false) {
@@ -271,8 +286,9 @@ export function registerGen(program: Command): void {
         }
         // stderr breadcrumb: see gen video --no-wait for the duplicate-charge rationale.
         info(`task_id=${taskId}`);
+        if (idempotencyKey) info(`idempotency_key=${idempotencyKey}`);
         if (g.json) {
-          printJson({ model, task_id: taskId, status: res.status ?? 'queued', submitted: true, next_command: `focalapi task status ${taskId} --json` });
+          printJson({ model, task_id: taskId, status: res.status ?? 'queued', submitted: true, ...(res.idempotent_replay ? { idempotent_replay: true } : {}), next_command: `focalapi task status ${taskId} --json` });
         } else {
           process.stdout.write(taskId + '\n');
           info(`任务已提交。查询：focalapi task status ${taskId}`);
@@ -457,6 +473,7 @@ export function registerGen(program: Command): void {
     .option('--execution-expires-after <seconds>', '任务过期秒数（3600–259200）', (v) => Number.parseInt(v, 10))
     .option('--safety-identifier <identifier>', 'Seedance 安全标识符（1–64 个可打印 ASCII 字符）')
     .option('--no-wait', '提交后立即返回 task_id，不等待完成')
+    .option('--idempotency-key <key>', '幂等键（8–128 个可打印 ASCII 字符）。同一 key 的重复提交拿回原任务而不重复计费；省略时自动生成。重试不确定的提交时务必复用原 key')
     .option('--poll-interval <ms>', '轮询间隔毫秒', (v) => Number.parseInt(v, 10), 5_000)
     .option('--timeout <minutes>', '最长等待分钟', (v) => Number.parseInt(v, 10), 30)
     .option('-o, --out <dir>', '输出目录', DEFAULT_OUT_DIR)
@@ -465,7 +482,7 @@ export function registerGen(program: Command): void {
       async (
         promptParts: string[],
         opts: {
-          model?: string; seconds?: number; duration?: number; size?: string; resolution?: string; ratio?: string; aspectRatio?: string; seed?: number; fps?: number; safetyTolerance?: number; image?: string[]; firstFrame?: string; content?: string;
+          model?: string; seconds?: number; duration?: number; size?: string; resolution?: string; ratio?: string; aspectRatio?: string; seed?: number; fps?: number; safetyTolerance?: number; image?: string[]; firstFrame?: string; content?: string; idempotencyKey?: string;
           generateAudio?: boolean; watermark?: boolean; serviceTier?: string; priority?: number; callbackUrl?: string;
           returnLastFrame?: boolean; executionExpiresAfter?: number; safetyIdentifier?: string;
           wait?: boolean; pollInterval: number; timeout: number; out: string;
@@ -524,11 +541,13 @@ export function registerGen(program: Command): void {
         });
         if (Object.keys(metadata).length > 0) body.metadata = metadata;
 
-        const created = await withProgress('正在提交视频任务', () => request<unknown>({
+        const idempotencyKey = resolveIdempotencyKey(opts.idempotencyKey);
+        const created = await withProgress('正在提交视频任务', () => request<{ task_id?: string; id?: string; status?: string; idempotent_replay?: boolean }>({
           baseUrl: auth.baseUrl,
           path: '/v1/video/generations',
           apiKey: auth.apiKey,
           body,
+          headers: { 'Idempotency-Key': idempotencyKey },
           timeoutMs: 120_000,
         }));
         const taskId = extractTaskId(created);
@@ -540,8 +559,10 @@ export function registerGen(program: Command): void {
           // stderr breadcrumb: a caller whose stdout JSON parsing fails can still
           // recover the task_id instead of resubmitting (duplicate charge).
           info(`task_id=${taskId}`);
+          info(`idempotency_key=${idempotencyKey}`);
+          if (created.idempotent_replay) info('已回放原任务（idempotent_replay，未重复计费）');
           if (g.json) {
-            printJson({ model, task_id: taskId, submitted: true, next_command: `focalapi task status ${taskId} --json` });
+            printJson({ model, task_id: taskId, submitted: true, ...(created.idempotent_replay ? { idempotent_replay: true } : {}), next_command: `focalapi task status ${taskId} --json` });
           } else {
             process.stdout.write(taskId + '\n');
             info(`任务已提交。续取：focalapi task status ${taskId} / focalapi task download ${taskId}；排队中可取消：focalapi task cancel ${taskId}`);

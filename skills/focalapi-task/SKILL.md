@@ -13,8 +13,10 @@ metadata:
 After a generation command returns `task_id`, prefer the response's `next_command`:
 
 ```bash
-focalapi task status <task-id> --json
-focalapi task download <task-id> -o ./focalapi-out --json
+focalapi task status <task-id> --json          # one-shot status check
+focalapi task status <task-id> --wait          # built-in polling until a terminal state — do not write your own poller
+focalapi task status <task-id> --wait --download -o ./focalapi-out --json
+focalapi task list --status in_progress --json # reconcile recent tasks after losing a submission output
 focalapi task cancel <task-id> --json
 ```
 
@@ -24,7 +26,9 @@ focalapi task cancel <task-id> --json
 - `cancelled`: the task was stopped; a cancelled queued task is refunded. Do not download or resubmit unless the user asks for a new attempt.
 - `unknown`: preserve the raw response and run `focalapi doctor --json`; never fabricate a success state.
 
-Task IDs are case-sensitive and mix `l`/`1`/`I` and `O`/`0`. Copy them exactly from the submission output — stdout JSON or the stderr `task_id=` breadcrumb — instead of retyping.
+Task IDs are case-sensitive and mix `l`/`1`/`I` and `O`/`0`. Copy them exactly from the submission output — stdout JSON or the stderr `task_id=` breadcrumb — instead of retyping. If a submission output is lost entirely, run `task list` to recover recent task IDs before considering any resubmission.
+
+Generation commands print the submission's `idempotency_key=` on stderr. When retrying a submission whose outcome is uncertain (timeout, crash, lost output), reuse that same key via `--idempotency-key` so the retry replays the original task instead of double-charging; a fresh key means a deliberate new generation.
 
 `task cancel` only works while a task is still queued (`pending`). A 409 `task_already_running` means generation already started and cannot be stopped — keep tracking with `task status`. Cancellation failures return explicit codes (`task_already_finished`, `task_cancel_failed`); follow `error.hint` instead of retrying blindly.
 

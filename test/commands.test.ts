@@ -960,6 +960,87 @@ describe('gen video metadata content', () => {
   });
 });
 
+describe('task list + wait + idempotency key', () => {
+  it('task list returns the caller\'s recent tasks', async () => {
+    vi.stubGlobal(
+      'fetch',
+      mockFetchRouter({
+        '/v1/tasks': () => ({
+          object: 'list',
+          data: [
+            { task_id: 't-newest', model: 'grok-imagine-video', action: 'generate', status: 'in_progress', progress: 40, quota: 5000, created_at: 1787000000 },
+            { task_id: 't-older', model: 'seedream-5-0-260128', action: 'image_generation', status: 'completed', progress: 100, quota: 3000, created_at: 1786900000 },
+          ],
+        }),
+      }),
+    );
+    expect(await main(argv('task', 'list', '--json'))).toBe(0);
+    const out = parseStdoutJson() as { data: { task_id: string }[] };
+    expect(out.data.map((item) => item.task_id)).toEqual(['t-newest', 't-older']);
+  });
+
+  it('task status --wait polls to a terminal state and reports elapsed time', async () => {
+    let calls = 0;
+    vi.stubGlobal(
+      'fetch',
+      mockFetchRouter({
+        '/v1/video/generations/task-wait-1': () => {
+          calls += 1;
+          if (calls === 1) {
+            return { task_id: 'task-wait-1', status: 'IN_PROGRESS', progress: 40, created_at: Math.floor(Date.now() / 1000) - 30 };
+          }
+          return { task_id: 'task-wait-1', status: 'SUCCESS', progress: 100, created_at: Math.floor(Date.now() / 1000) - 90 };
+        },
+      }),
+    );
+    expect(await main(argv('task', 'status', 'task-wait-1', '--wait', '--poll-interval', '10', '--json'))).toBe(0);
+    const out = parseStdoutJson() as { status: string; elapsed_seconds: number };
+    expect(out.status).toBe('success');
+    expect(out.elapsed_seconds).toBeGreaterThanOrEqual(90);
+    expect(calls).toBeGreaterThanOrEqual(2);
+  });
+
+  it('gen video sends an idempotency key and breadcrumbs it on stderr', async () => {
+    let capturedKey: string | null = null;
+    vi.stubGlobal(
+      'fetch',
+      mockFetchRouter({
+        '/v1/video/generations': (init) => {
+          capturedKey = new Headers(init?.headers).get('Idempotency-Key');
+          return { task_id: 'idem-1', status: 'submitted' };
+        },
+      }),
+    );
+    expect(await main(argv('gen', 'video', 'x', '-m', 'grok-imagine-video-1.5', '--idempotency-key', 'agent-fixed-key-0001', '--no-wait', '--json'))).toBe(0);
+    expect(capturedKey).toBe('agent-fixed-key-0001');
+    expect(ctx.stderr()).toContain('idempotency_key=agent-fixed-key-0001');
+
+    // Auto-generated keys are valid and also breadcrumbed.
+    expect(await main(argv('gen', 'video', 'x', '-m', 'grok-imagine-video-1.5', '--no-wait', '--json'))).toBe(0);
+    expect(ctx.stderr()).toMatch(/idempotency_key=[0-9a-f-]{36}/);
+
+    // Malformed keys are rejected locally.
+    const spy = mockFetchRouter({});
+    vi.stubGlobal('fetch', spy);
+    expect(await main(argv('gen', 'video', 'x', '-m', 'grok-imagine-video-1.5', '--idempotency-key', 'bad key!', '--no-wait', '--json'))).toBe(1);
+    expect(spy).not.toHaveBeenCalled();
+  });
+
+  it('surfaces the idempotent_replay marker when the server replays the original task', async () => {
+    vi.stubGlobal(
+      'fetch',
+      mockFetchRouter({
+        '/v1/video/generations': () => ({ task_id: 'idem-orig', status: 'queued', idempotent_replay: true }),
+      }),
+    );
+    expect(await main(argv('gen', 'video', 'x', '-m', 'grok-imagine-video-1.5', '--idempotency-key', 'retry-same-key-0001', '--no-wait', '--json'))).toBe(0);
+    const out = parseStdoutJson() as { task_id: string; idempotent_replay?: boolean };
+    expect(out.task_id).toBe('idem-orig');
+    expect(out.idempotent_replay).toBe(true);
+    expect(ctx.stderr()).toContain('已回放原任务');
+  });
+});
+
 describe('usage', () => {
   it('usage --json 汇总 token 与 billing', async () => {
     vi.stubGlobal(
