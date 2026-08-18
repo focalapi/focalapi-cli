@@ -68,6 +68,7 @@ type VideoGenerationConstraint = {
   supportsWatermark?: boolean;
   allowedFps?: number[];
   safetyTolerance?: { minimum: number; maximum: number };
+  maxPromptRunes?: number;
 };
 
 type GeminiImageConstraint = {
@@ -226,12 +227,12 @@ const VIDEO_CONSTRAINTS: Record<string, VideoGenerationConstraint> = {
   'grok-imagine-video': {
     resolutions: ['480p', '720p'], aspectRatios: GROK_VIDEO_ASPECT_RATIOS,
     minSeconds: 1, maxSeconds: 15, disallowReferences: true, maxFirstFrameImages: 1,
-    supportsGenerateAudio: false, supportsWatermark: false,
+    supportsGenerateAudio: false, supportsWatermark: false, maxPromptRunes: 4096,
   },
   'grok-imagine-video-1.5': {
     resolutions: ['480p', '720p', '1080p'], aspectRatios: GROK_VIDEO_ASPECT_RATIOS,
     minSeconds: 1, maxSeconds: 15, maxReferenceImages: 7, referenceResolutions: ['480p', '720p'],
-    maxFirstFrameImages: 1, supportsGenerateAudio: false, supportsWatermark: false,
+    maxFirstFrameImages: 1, supportsGenerateAudio: false, supportsWatermark: false, maxPromptRunes: 4096,
   },
   'kling-3.0': {
     resolutions: ['720p', '1080p', '4k'], aspectRatios: KLING_VIDEO_ASPECT_RATIOS, minSeconds: 3, maxSeconds: 15,
@@ -492,10 +493,14 @@ export function validateVideoGeneration(
     firstFrameCount?: number;
     generateAudio?: boolean;
     watermark?: boolean;
+    promptRunes?: number;
   },
 ): void {
   const constraint = VIDEO_CONSTRAINTS[model.trim()];
   if (!constraint) return;
+  if (constraint.maxPromptRunes !== undefined && input.promptRunes !== undefined && input.promptRunes > constraint.maxPromptRunes) {
+    throw new ApiError('invalid_request', `${model} prompt must be at most ${constraint.maxPromptRunes} characters (received ${input.promptRunes})`);
+  }
   if ((input.imageCount ?? 0) > 0 && (input.firstFrameCount ?? 0) > 0) {
     throw new ApiError('invalid_request', `${model}: --image and --first-frame are mutually exclusive (reference-to-video vs image-to-video)`);
   }

@@ -920,6 +920,18 @@ describe('gen video + task', () => {
     expect(spy).not.toHaveBeenCalled();
   });
 
+  it('rejects grok prompts over 4096 characters locally before submission', async () => {
+    const spy = mockFetchRouter({});
+    vi.stubGlobal('fetch', spy);
+    const longPrompt = 'a'.repeat(4097);
+    expect(await main(argv('gen', 'video', longPrompt, '-m', 'grok-imagine-video-1.5', '--no-wait', '--json'))).toBe(1);
+    expect(spy).not.toHaveBeenCalled();
+    expect(ctx.stdout()).toContain('4096');
+
+    vi.stubGlobal('fetch', mockFetchRouter({ '/v1/video/generations': () => ({ task_id: 'prompt-ok', status: 'submitted' }) }));
+    expect(await main(argv('gen', 'video', 'a'.repeat(4096), '-m', 'grok-imagine-video-1.5', '--no-wait', '--json'))).toBe(0);
+  });
+
   it('accepts --duration as the --seconds alias and rejects conflicting duplicates', async () => {
     let capturedBody: Record<string, unknown> | undefined;
     vi.stubGlobal(

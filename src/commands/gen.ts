@@ -632,6 +632,7 @@ export function registerGen(program: Command): void {
         if (opts.safetyIdentifier) metadata.safety_identifier = opts.safetyIdentifier;
         if (opts.content) metadata.content = parseJsonArray(await readContentArgument(opts.content), 'content');
         validateVideoGeneration(model, {
+          promptRunes: [...promptParts.join(' ')].length,
           seconds,
           resolution: opts.resolution,
           ratio: opts.ratio,
