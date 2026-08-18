@@ -50,6 +50,9 @@ focalapi gen video "Ocean waves hitting rocks, cinematic" --no-wait -o ./out --j
 # Continue from next_command in the generation response without resubmitting the task.
 focalapi task status <task-id> --json
 focalapi task download <task-id> -o ./out --json
+
+# Stop a task that is still queued; cancelled tasks are refunded automatically.
+focalapi task cancel <task-id> --json
 ```
 
 When the user specifies a model, read its authoritative contract first:
@@ -68,7 +71,7 @@ focalapi models resolve video --json
 
 `resolve` returns the exact `model.id`, verified `endpoint_type`, complete `supported_params`, candidate models, and a `next_command`. When a list summary and detailed contract disagree, the detailed contract is authoritative.
 
-The maintained creative defaults are aligned with the current catalog: Seedream 5.0, GPT Image 2, Gemini 3.1 Image, Grok Imagine Image 2.0, Kling Image 3.0, Qwen Image 3.0, and Krea 2 for images; Seedance 2.5, Kling 3.0, Vidu Q3, Gemini Omni Flash, Grok Imagine Video 1.5, LTX 2.5, FLUX 3, and MiniMax H3 for video. Availability still depends on the current key, so runtime model details always take precedence over this overview.
+The maintained creative defaults are aligned with the current catalog: Seedream 5.0, GPT Image 2, Gemini 3.1 Image, Grok Imagine Image 2.0, Kling Image 3.0, Qwen Image 3.0, and Krea 2 for images; Seedance 2.5 (480p/720p/1080p), Kling 3.0, Vidu Q3, Gemini Omni Flash, Grok Imagine Video 1.5, LTX 2.5, and FLUX 3 for video. Availability still depends on the current key, so runtime model details always take precedence over this overview.
 
 ## Agent integration
 
@@ -112,7 +115,7 @@ The fully validated automatic generation paths currently cover images and video,
 | Generate images with automatic or explicit model selection | `focalapi gen image` |
 | Generate video with automatic or explicit model selection | `focalapi gen video` |
 | Resolve models and inspect live contracts | `focalapi models resolve/get/search/list` |
-| Check and download asynchronous tasks | `focalapi task status/download` |
+| Check, cancel (queued), and download asynchronous tasks | `focalapi task status/cancel/download` |
 | Sign in and inspect key status | `focalapi auth login/status/logout` |
 | Inspect quota, usage, and diagnostics | `focalapi usage`, `focalapi doctor` |
 | Connect Agent Skills | `focalapi connect` |

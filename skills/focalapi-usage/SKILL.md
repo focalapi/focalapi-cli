@@ -19,6 +19,7 @@ focalapi doctor --json
 - For quota, balance, usage, or billing questions, run `usage`.
 - For `missing_api_key` or `invalid_api_key`, route to focalapi-auth.
 - For `insufficient_quota`, run `usage`, explain the shortfall, and do not add funds automatically.
+- For `capacity_exhausted` (HTTP 503), wait about 10 seconds and retry the exact same command; the queue admission gate is full and parameters are not the problem.
 - For `network_error`, `timeout`, or 5xx errors, run `doctor` once and follow `checks[].hint`.
 - For `invalid_request`, return to the live `models get` parameter contract and do not resend the same request.
 - For `upstream_auth_failed`, preserve the request ID and escalate to the service operator; do not ask the user to replace the FocalAPI key.

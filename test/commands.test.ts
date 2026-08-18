@@ -454,6 +454,91 @@ describe('gen gemini-image documented fields', () => {
       },
     });
   });
+
+  it('3.1-flash accepts the extended ratio surface and sampling params; 2.5-flash enforces its reference limits', async () => {
+    const png = Buffer.from('gemini-png-bytes').toString('base64');
+    let capturedBody: Record<string, unknown> | undefined;
+    vi.stubGlobal(
+      'fetch',
+      mockFetchRouter({
+        '/v1beta/models/gemini-3.1-flash-image:generateContent': (init) => {
+          capturedBody = JSON.parse(String(init?.body)) as Record<string, unknown>;
+          return { candidates: [{ content: { parts: [{ inlineData: { mimeType: 'image/png', data: png } }] } }] };
+        },
+      }),
+    );
+    expect(await main(argv(
+      'gen', 'gemini-image', 'x', '-m', 'gemini-3.1-flash-image',
+      '--aspect-ratio', '1:4', '--thinking-level', 'HIGH', '-o', join(ctx.homeDir, 'g31-out'), '--json',
+    ))).toBe(0);
+    expect(capturedBody).toMatchObject({ generationConfig: { thinkingConfig: { thinkingLevel: 'HIGH' } } });
+
+    const spy = mockFetchRouter({});
+    vi.stubGlobal('fetch', spy);
+    // 2.5-flash: at most 1 reference image, and it must be an inline data URI.
+    expect(await main(argv(
+      'gen', 'gemini-image', 'x', '-m', 'gemini-2.5-flash-image',
+      '--image', 'data:image/png;base64,ZmFrZQ==', 'data:image/png;base64,ZmFrZQ==', '--json',
+    ))).toBe(1);
+    expect(await main(argv(
+      'gen', 'gemini-image', 'x', '-m', 'gemini-2.5-flash-image', '--image', 'https://example.com/a.png', '--json',
+    ))).toBe(1);
+    // Sampling params stay rejected on 2.5-flash.
+    expect(await main(argv(
+      'gen', 'gemini-image', 'x', '-m', 'gemini-2.5-flash-image', '--thinking-level', 'HIGH', '--json',
+    ))).toBe(1);
+    expect(spy).not.toHaveBeenCalled();
+  });
+});
+
+describe('task cancel + capacity signal', () => {
+  it('cancel issues DELETE and reports the cancelled terminal state', async () => {
+    let capturedMethod: string | undefined;
+    vi.stubGlobal(
+      'fetch',
+      mockFetchRouter({
+        '/v1/video/generations/task-cancel-1': (init) => {
+          capturedMethod = init?.method;
+          return { id: 'task-cancel-1', status: 'cancelled', cancelled: true };
+        },
+      }),
+    );
+    expect(await main(argv('task', 'cancel', 'task-cancel-1', '--json'))).toBe(0);
+    expect(capturedMethod).toBe('DELETE');
+    expect((parseStdoutJson() as { status: string; cancelled: boolean })).toMatchObject({ status: 'cancelled', cancelled: true });
+  });
+
+  it('cancel surfaces the running-task 409 contract with the next action', async () => {
+    vi.stubGlobal(
+      'fetch',
+      mockFetchRouter({
+        '/v1/video/generations/task-running': () => new Response(
+          JSON.stringify({ error: { message: 'task is already running and cannot be cancelled', type: 'invalid_request_error', code: 'task_already_running' } }),
+          { status: 409 },
+        ),
+      }),
+    );
+    expect(await main(argv('task', 'cancel', 'task-running', '--json'))).toBe(1);
+    const out = parseStdoutJson() as { error: { code: string; hint?: string } };
+    expect(out.error.code).toBe('task_already_running');
+    expect(out.error.hint).toContain('focalapi task status task-running');
+  });
+
+  it('turns the 503 capacity_exhausted signal into a retryable error code', async () => {
+    vi.stubGlobal(
+      'fetch',
+      mockFetchRouter({
+        '/v1/video/generations': () => new Response(
+          JSON.stringify({ error: { message: 'creative capacity exhausted, retry later', type: 'server_error', code: 'capacity_exhausted' } }),
+          { status: 503, headers: { 'retry-after': '10' } },
+        ),
+      }),
+    );
+    expect(await main(argv('gen', 'video', 'x', '-m', 'grok-imagine-video-1.5', '--no-wait', '--json'))).toBe(1);
+    const out = parseStdoutJson() as { error: { code: string; hint?: string } };
+    expect(out.error.code).toBe('capacity_exhausted');
+    expect(out.error.hint).toContain('重试');
+  });
 });
 
 describe('gen omni-video', () => {
@@ -644,10 +729,90 @@ describe('gen video + task', () => {
     expect(grokSpy).not.toHaveBeenCalled();
 
     vi.stubGlobal('fetch', mockFetchRouter({ '/v1/video/generations': () => ({ task_id: 'seedance-25', status: 'submitted' }) }));
-    expect(await main(argv('gen', 'video', 'x', '-m', 'dreamina-seedance-2-5-260628', '--seconds', '30', '--no-wait', '--json'))).toBe(0);
+    expect(await main(argv('gen', 'video', 'x', '-m', 'dreamina-seedance-2-5-260628', '--seconds', '30', '--resolution', '1080p', '--no-wait', '--json'))).toBe(0);
     const spy = mockFetchRouter({});
     vi.stubGlobal('fetch', spy);
     expect(await main(argv('gen', 'video', 'x', '-m', 'dreamina-seedance-2-5-260628', '--seconds', '31', '--no-wait', '--json'))).toBe(1);
+    expect(spy).not.toHaveBeenCalled();
+  });
+
+  it('maps Grok video modes: --image is r2v (capped at 720p), --first-frame is i2v', async () => {
+    let capturedBody: Record<string, unknown> | undefined;
+    vi.stubGlobal(
+      'fetch',
+      mockFetchRouter({
+        '/v1/video/generations': (init) => {
+          capturedBody = JSON.parse(String(init?.body)) as Record<string, unknown>;
+          return { task_id: 'grok-mode', status: 'submitted' };
+        },
+      }),
+    );
+    // r2v with references: 720p passes, images array is the reference channel.
+    expect(await main(argv(
+      'gen', 'video', 'x', '-m', 'grok-imagine-video-1.5', '--seconds', '6', '--resolution', '720p',
+      '--image', 'https://example.com/a.png', 'https://example.com/b.png', '--no-wait', '--json',
+    ))).toBe(0);
+    expect(capturedBody).toMatchObject({ images: ['https://example.com/a.png', 'https://example.com/b.png'] });
+
+    // i2v via --first-frame keeps 1080p and sends the string image field.
+    expect(await main(argv(
+      'gen', 'video', 'x', '-m', 'grok-imagine-video-1.5', '--seconds', '6', '--resolution', '1080p',
+      '--first-frame', 'https://example.com/frame.png', '--no-wait', '--json',
+    ))).toBe(0);
+    expect(capturedBody).toMatchObject({ image: 'https://example.com/frame.png' });
+
+    // Legacy Grok video is image-to-video only; --first-frame still works there.
+    expect(await main(argv(
+      'gen', 'video', 'x', '-m', 'grok-imagine-video', '--seconds', '6',
+      '--first-frame', 'https://example.com/frame.png', '--no-wait', '--json',
+    ))).toBe(0);
+
+    const spy = mockFetchRouter({});
+    vi.stubGlobal('fetch', spy);
+    // r2v mode caps at 720p — 1080p must be intercepted locally.
+    expect(await main(argv(
+      'gen', 'video', 'x', '-m', 'grok-imagine-video-1.5', '--resolution', '1080p',
+      '--image', 'https://example.com/a.png', '--no-wait', '--json',
+    ))).toBe(1);
+    // r2v supports at most 7 references.
+    expect(await main(argv(
+      'gen', 'video', 'x', '-m', 'grok-imagine-video-1.5',
+      '--image', ...Array.from({ length: 8 }, (_, i) => `https://example.com/${i}.png`), '--no-wait', '--json',
+    ))).toBe(1);
+    // Legacy Grok rejects reference images outright.
+    expect(await main(argv(
+      'gen', 'video', 'x', '-m', 'grok-imagine-video', '--image', 'https://example.com/a.png', '--no-wait', '--json',
+    ))).toBe(1);
+    // --image and --first-frame are mutually exclusive.
+    expect(await main(argv(
+      'gen', 'video', 'x', '-m', 'grok-imagine-video-1.5', '--image', 'https://example.com/a.png',
+      '--first-frame', 'https://example.com/b.png', '--no-wait', '--json',
+    ))).toBe(1);
+    // Grok video rejects generate_audio and watermark (explicit upstream 400s).
+    expect(await main(argv(
+      'gen', 'video', 'x', '-m', 'grok-imagine-video-1.5', '--generate-audio', 'true', '--no-wait', '--json',
+    ))).toBe(1);
+    expect(await main(argv(
+      'gen', 'video', 'x', '-m', 'grok-imagine-video-1.5', '--watermark', 'true', '--no-wait', '--json',
+    ))).toBe(1);
+    expect(spy).not.toHaveBeenCalled();
+  });
+
+  it('enforces the omni reference cap, Vidu seed ceiling, and flux-3 image-mode safety cap locally', async () => {
+    const spy = mockFetchRouter({});
+    vi.stubGlobal('fetch', spy);
+    expect(await main(argv(
+      'gen', 'video', 'x', '-m', 'gemini-omni-flash-preview',
+      '--image', ...Array.from({ length: 15 }, (_, i) => `https://example.com/${i}.png`), '--no-wait', '--json',
+    ))).toBe(1);
+    expect(await main(argv(
+      'gen', 'video', 'x', '-m', 'gemini-omni-flash-preview', '--generate-audio', 'true', '--no-wait', '--json',
+    ))).toBe(1);
+    expect(await main(argv('gen', 'video', 'x', '-m', 'viduq3-pro', '--seed', '3000000000', '--no-wait', '--json'))).toBe(1);
+    expect(await main(argv(
+      'gen', 'video', 'x', '-m', 'flux-3', '--safety-tolerance', '4',
+      '--image', 'https://example.com/a.png', '--no-wait', '--json',
+    ))).toBe(1);
     expect(spy).not.toHaveBeenCalled();
   });
 

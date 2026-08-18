@@ -108,7 +108,12 @@ export async function rawRequest(opts: RequestOptions): Promise<Response> {
   if (!res.ok) {
     const text = await res.text().catch(() => '');
     const { message, body, upstreamCode } = extractErrorMessage(text);
-    const code = refineErrorCode(res.status, message, { authFailureIsInvalidApiKey: opts.authFailureIsInvalidApiKey });
+    let code = refineErrorCode(res.status, message, { authFailureIsInvalidApiKey: opts.authFailureIsInvalidApiKey });
+    // The bounded queue admission signal (HTTP 503 capacity_exhausted + Retry-After)
+    // is retryable as-is; it must not surface as a generic server_error.
+    if (upstreamCode === 'capacity_exhausted' || (res.status === 503 && /capacity/i.test(message))) {
+      code = 'capacity_exhausted';
+    }
     const requestId = res.headers.get('x-request-id') ?? res.headers.get('request-id') ?? res.headers.get('x-requestid') ?? undefined;
     throw new ApiError(code, message, { status: res.status, body, upstreamCode, requestId });
   }

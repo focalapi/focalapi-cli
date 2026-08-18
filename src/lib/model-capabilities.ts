@@ -52,7 +52,20 @@ type VideoGenerationConstraint = {
   supportsPriority?: boolean;
   supportsSeed?: boolean;
   maxSeed?: number;
+  /** Cap for --image (reference images / media inputs). */
   maxReferenceImages?: number;
+  /** Resolution whitelist while reference images are present (e.g. Grok 1.5 r2v caps at 720p). */
+  referenceResolutions?: string[];
+  /** Model rejects reference images entirely (Grok legacy video is image-to-video only). */
+  disallowReferences?: boolean;
+  /** Cap for --first-frame (image-to-video mode). */
+  maxFirstFrameImages?: number;
+  /** Tighter safety_tolerance ceiling while any image is attached (flux-3 caps at 2 for i2v/v2v). */
+  safetyToleranceMaxWithImages?: number;
+  /** Explicit false = the model rejects generate_audio; undefined = pass through. */
+  supportsGenerateAudio?: boolean;
+  /** Explicit false = the model rejects watermark; undefined = pass through. */
+  supportsWatermark?: boolean;
   allowedFps?: number[];
   safetyTolerance?: { minimum: number; maximum: number };
 };
@@ -61,7 +74,15 @@ type GeminiImageConstraint = {
   aspectRatios: string[];
   imageSizes?: string[];
   supportsSampling: boolean;
+  maxReferenceImages?: number;
+  /** Reference images must be base64 data URIs (inlineData); fileUri is rejected upstream. */
+  referenceImagesInlineDataOnly?: boolean;
+  maxSeed?: number;
 };
+
+// 2^63-1 cannot be represented as an exact JSON number, so the CLI caps seeds at
+// Number.MAX_SAFE_INTEGER to never silently corrupt a large seed value.
+const GEMINI_IMAGE_MAX_SEED = 9_007_199_254_740_991;
 
 const SEEDREAM_OUTPUT_FORMATS = ['png', 'jpeg'];
 const SEEDREAM_OPTIMIZE_PROMPT_MODES = ['auto', 'enabled', 'disabled'];
@@ -89,7 +110,7 @@ const IMAGE_CONSTRAINTS: Record<string, ImageGenerationConstraint> = {
     backgrounds: ['auto', 'opaque'],
   },
   'seedream-4-0-250828': {
-    defaultSize: '1k',
+    defaultSize: '2k',
     sizeTiers: ['1k', '2k', '4k'],
     maxN: 10,
     maxReferenceImages: 10,
@@ -184,61 +205,81 @@ const FLUX_VIDEO_RATIOS = ['auto', '21:9', '2:1', '16:9', '4:3', '1:1', '3:4', '
 const VIDEO_CONSTRAINTS: Record<string, VideoGenerationConstraint> = {
   'dreamina-seedance-2-0-260128': {
     resolutions: ['480p', '720p', '1080p', '4k'], ratios: SEEDANCE_RATIOS, minSeconds: 4, maxSeconds: 15,
+    maxReferenceImages: 9,
   },
   'dreamina-seedance-2-0-fast-260128': {
     resolutions: ['480p', '720p'], ratios: SEEDANCE_RATIOS, minSeconds: 4, maxSeconds: 15,
+    maxReferenceImages: 9,
   },
   'seed-2-0-mini-260428': {
     resolutions: ['480p', '720p'], ratios: SEEDANCE_RATIOS, minSeconds: 4, maxSeconds: 15,
+    maxReferenceImages: 9,
   },
   'dreamina-seedance-2-5-260628': {
-    resolutions: ['480p', '720p'], ratios: SEEDANCE_RATIOS, minSeconds: 4, maxSeconds: 30,
+    resolutions: ['480p', '720p', '1080p'], ratios: SEEDANCE_RATIOS, minSeconds: 4, maxSeconds: 30,
+    maxReferenceImages: 30,
   },
   'gemini-omni-flash-preview': {
     resolutions: [], ratios: ['16:9', '9:16'], minSeconds: 3, maxSeconds: 10,
+    maxReferenceImages: 14, supportsGenerateAudio: false,
   },
   'grok-imagine-video': {
     resolutions: ['480p', '720p'], aspectRatios: GROK_VIDEO_ASPECT_RATIOS,
-    minSeconds: 1, maxSeconds: 15, maxReferenceImages: 1,
+    minSeconds: 1, maxSeconds: 15, disallowReferences: true, maxFirstFrameImages: 1,
+    supportsGenerateAudio: false, supportsWatermark: false,
   },
   'grok-imagine-video-1.5': {
     resolutions: ['480p', '720p', '1080p'], aspectRatios: GROK_VIDEO_ASPECT_RATIOS,
-    minSeconds: 1, maxSeconds: 15, maxReferenceImages: 7,
+    minSeconds: 1, maxSeconds: 15, maxReferenceImages: 7, referenceResolutions: ['480p', '720p'],
+    maxFirstFrameImages: 1, supportsGenerateAudio: false, supportsWatermark: false,
   },
   'kling-3.0': {
     resolutions: ['720p', '1080p', '4k'], aspectRatios: KLING_VIDEO_ASPECT_RATIOS, minSeconds: 3, maxSeconds: 15,
+    maxReferenceImages: 2, supportsGenerateAudio: true,
   },
   'viduq3-pro': {
     resolutions: ['720p', '1080p'], aspectRatios: VIDU_VIDEO_ASPECT_RATIOS,
-    minSeconds: 1, maxSeconds: 16, supportsSeed: true, maxSeed: 4294967295,
+    minSeconds: 1, maxSeconds: 16, supportsSeed: true, maxSeed: 2147483647, maxReferenceImages: 2,
   },
   'viduq3-turbo': {
     resolutions: ['720p', '1080p'], aspectRatios: VIDU_VIDEO_ASPECT_RATIOS,
-    minSeconds: 1, maxSeconds: 16, supportsSeed: true, maxSeed: 4294967295,
+    minSeconds: 1, maxSeconds: 16, supportsSeed: true, maxSeed: 2147483647, maxReferenceImages: 2,
   },
   'ltx-2-5-fast': {
     resolutions: ['1280x720', '720x1280', '1920x1080', '1080x1920', '2560x1440', '1440x2560', '3840x2160', '2160x3840'],
     minSeconds: 6, maxSeconds: 20, allowedSeconds: [6, 8, 10, 12, 14, 16, 18, 20],
-    allowedFps: [24, 25, 48, 50],
+    allowedFps: [24, 25, 48, 50], maxReferenceImages: 2, supportsGenerateAudio: true,
   },
   'ltx-2-5-pro': {
     resolutions: ['1280x720', '720x1280', '1920x1080', '1080x1920'],
     minSeconds: 6, maxSeconds: 10, allowedSeconds: [6, 8, 10],
-    allowedFps: [24, 25, 50],
+    allowedFps: [24, 25, 50], maxReferenceImages: 2, supportsGenerateAudio: true,
   },
   'flux-3': {
     resolutions: ['hd', 'fhd'], ratios: FLUX_VIDEO_RATIOS, minSeconds: 5, maxSeconds: 20,
-    safetyTolerance: { minimum: 0, maximum: 4 },
+    safetyTolerance: { minimum: 0, maximum: 4 }, safetyToleranceMaxWithImages: 2, maxReferenceImages: 10,
   },
 };
 
 const COMMON_GEMINI_RATIOS = ['auto', '1:1', '2:3', '3:2', '3:4', '4:3', '4:5', '5:4', '9:16', '16:9', '21:9'];
+// Nano Banana 2 V2 / Lite nodes extend the ratio surface with four extremes.
+const EXTENDED_GEMINI_RATIOS = [...COMMON_GEMINI_RATIOS, '1:4', '4:1', '1:8', '8:1'];
 const GEMINI_IMAGE_CONSTRAINTS: Record<string, GeminiImageConstraint> = {
-  'gemini-2.5-flash-image': { aspectRatios: COMMON_GEMINI_RATIOS, supportsSampling: false },
-  'gemini-3-pro-image': { aspectRatios: COMMON_GEMINI_RATIOS, imageSizes: ['1K', '2K', '4K'], supportsSampling: false },
-  'gemini-3.1-flash-image': { aspectRatios: COMMON_GEMINI_RATIOS, imageSizes: ['1K', '2K', '4K'], supportsSampling: false },
+  'gemini-2.5-flash-image': {
+    aspectRatios: COMMON_GEMINI_RATIOS, supportsSampling: false,
+    maxReferenceImages: 1, referenceImagesInlineDataOnly: true, maxSeed: GEMINI_IMAGE_MAX_SEED,
+  },
+  'gemini-3-pro-image': {
+    aspectRatios: COMMON_GEMINI_RATIOS, imageSizes: ['1K', '2K', '4K'], supportsSampling: false,
+    maxReferenceImages: 14, maxSeed: GEMINI_IMAGE_MAX_SEED,
+  },
+  'gemini-3.1-flash-image': {
+    aspectRatios: EXTENDED_GEMINI_RATIOS, imageSizes: ['1K', '2K', '4K'], supportsSampling: true,
+    maxReferenceImages: 14, maxSeed: GEMINI_IMAGE_MAX_SEED,
+  },
   'gemini-3.1-flash-lite-image': {
-    aspectRatios: [...COMMON_GEMINI_RATIOS, '1:4', '4:1', '1:8', '8:1'], imageSizes: ['1K'], supportsSampling: true,
+    aspectRatios: EXTENDED_GEMINI_RATIOS, imageSizes: ['1K'], supportsSampling: true,
+    maxReferenceImages: 14, maxSeed: GEMINI_IMAGE_MAX_SEED,
   },
 };
 
@@ -385,7 +426,19 @@ export function validateImageGeneration(
   }
 }
 
-export function validateGeminiImageGeneration(model: string, input: { aspectRatio?: string; imageSize?: string; seed?: number; thinkingLevel?: string; temperature?: number; topP?: number }): void {
+export function validateGeminiImageGeneration(
+  model: string,
+  input: {
+    aspectRatio?: string;
+    imageSize?: string;
+    seed?: number;
+    thinkingLevel?: string;
+    temperature?: number;
+    topP?: number;
+    referenceImageCount?: number;
+    nonDataUriReferenceCount?: number;
+  },
+): void {
   const constraint = GEMINI_IMAGE_CONSTRAINTS[model.trim()];
   if (!constraint) {
     throw new ApiError('invalid_request', `${model} is not a supported Gemini image model; run focalapi models get ${model} first`);
@@ -397,11 +450,18 @@ export function validateGeminiImageGeneration(model: string, input: { aspectRati
     const supported = constraint.imageSizes?.join(', ') ?? 'none';
     throw new ApiError('invalid_request', `${model} imageSize must be one of ${supported} (received: ${input.imageSize})`);
   }
-  if (input.seed !== undefined && (!Number.isInteger(input.seed) || input.seed < 0)) {
-    throw new ApiError('invalid_request', 'seed must be a non-negative integer');
+  if (input.seed !== undefined && (!Number.isInteger(input.seed) || input.seed < 0 || (constraint.maxSeed !== undefined && input.seed > constraint.maxSeed))) {
+    const maximum = constraint.maxSeed === undefined ? '' : ` no greater than ${constraint.maxSeed}`;
+    throw new ApiError('invalid_request', `seed must be a non-negative integer${maximum}`);
+  }
+  if (input.referenceImageCount !== undefined && constraint.maxReferenceImages !== undefined && input.referenceImageCount > constraint.maxReferenceImages) {
+    throw new ApiError('invalid_request', `${model} supports at most ${constraint.maxReferenceImages} reference image${constraint.maxReferenceImages === 1 ? '' : 's'}`);
+  }
+  if (constraint.referenceImagesInlineDataOnly && input.nonDataUriReferenceCount) {
+    throw new ApiError('invalid_request', `${model} reference images must be base64 data URIs (inlineData); fileUri inputs are rejected by this model`);
   }
   if (!constraint.supportsSampling && (input.thinkingLevel || input.temperature !== undefined || input.topP !== undefined)) {
-    throw new ApiError('invalid_request', `${model} supports thinkingLevel, temperature, and topP only on gemini-3.1-flash-lite-image`);
+    throw new ApiError('invalid_request', `${model} supports thinkingLevel, temperature, and topP only on gemini-3.1-flash-image and gemini-3.1-flash-lite-image`);
   }
   if (input.thinkingLevel && !['MINIMAL', 'HIGH'].includes(input.thinkingLevel.toUpperCase())) {
     throw new ApiError('invalid_request', 'thinkingLevel must be MINIMAL or HIGH');
@@ -428,10 +488,32 @@ export function validateVideoGeneration(
     safetyTolerance?: number;
     executionExpiresAfter?: number;
     safetyIdentifier?: string;
+    imageCount?: number;
+    firstFrameCount?: number;
+    generateAudio?: boolean;
+    watermark?: boolean;
   },
 ): void {
   const constraint = VIDEO_CONSTRAINTS[model.trim()];
   if (!constraint) return;
+  if ((input.imageCount ?? 0) > 0 && (input.firstFrameCount ?? 0) > 0) {
+    throw new ApiError('invalid_request', `${model}: --image and --first-frame are mutually exclusive (reference-to-video vs image-to-video)`);
+  }
+  if (constraint.disallowReferences && (input.imageCount ?? 0) > 0) {
+    throw new ApiError('invalid_request', `${model} supports image-to-video only (single --first-frame image); reference images require grok-imagine-video-1.5`);
+  }
+  if (input.imageCount !== undefined && constraint.maxReferenceImages !== undefined && input.imageCount > constraint.maxReferenceImages) {
+    throw new ApiError('invalid_request', `${model} supports at most ${constraint.maxReferenceImages} reference image${constraint.maxReferenceImages === 1 ? '' : 's'}`);
+  }
+  if (input.firstFrameCount !== undefined && constraint.maxFirstFrameImages !== undefined && input.firstFrameCount > constraint.maxFirstFrameImages) {
+    throw new ApiError('invalid_request', `${model} image-to-video supports exactly ${constraint.maxFirstFrameImages} starting image${constraint.maxFirstFrameImages === 1 ? '' : 's'} (--first-frame)`);
+  }
+  if (input.generateAudio !== undefined && constraint.supportsGenerateAudio === false) {
+    throw new ApiError('invalid_request', `${model} does not support generate_audio`);
+  }
+  if (input.watermark !== undefined && constraint.supportsWatermark === false) {
+    throw new ApiError('invalid_request', `${model} does not support watermark`);
+  }
 	if (input.seconds !== undefined && (input.seconds < constraint.minSeconds || input.seconds > constraint.maxSeconds)) {
 		throw new ApiError('invalid_request', `${model} seconds must be ${constraint.minSeconds}-${constraint.maxSeconds} (received: ${input.seconds})`);
 	}
@@ -440,7 +522,11 @@ export function validateVideoGeneration(
 	}
 	if (input.resolution && !constraint.resolutions.includes(input.resolution.toLowerCase())) {
     throw new ApiError('invalid_request', `${model} resolution must be one of ${constraint.resolutions.join(', ')} (received: ${input.resolution})`);
-	}
+  }
+  if (input.resolution && (input.imageCount ?? 0) > 0 && constraint.referenceResolutions &&
+      !constraint.referenceResolutions.includes(input.resolution.toLowerCase())) {
+    throw new ApiError('invalid_request', `${model} reference-to-video mode supports only ${constraint.referenceResolutions.join(' and ')} (received: ${input.resolution}); ${input.resolution} requires text-to-video or a single --first-frame image`);
+  }
 	if (input.seconds !== undefined && input.resolution) {
 		const required = constraint.requiredSecondsByResolution?.[input.resolution.toLowerCase()];
 		if (required !== undefined && input.seconds !== required) {
@@ -475,16 +561,16 @@ export function validateVideoGeneration(
   if (input.fps !== undefined && (!constraint.allowedFps || !constraint.allowedFps.includes(input.fps))) {
     throw new ApiError('invalid_request', `${model} fps must be one of ${constraint.allowedFps?.join(', ') ?? 'none'} (received: ${input.fps})`);
   }
-  if (input.safetyTolerance !== undefined && (
-    !constraint.safetyTolerance ||
-    !Number.isInteger(input.safetyTolerance) ||
-    input.safetyTolerance < constraint.safetyTolerance.minimum ||
-    input.safetyTolerance > constraint.safetyTolerance.maximum
-  )) {
-    const range = constraint.safetyTolerance
-      ? `${constraint.safetyTolerance.minimum}-${constraint.safetyTolerance.maximum}`
-      : 'unsupported';
-    throw new ApiError('invalid_request', `${model} safety_tolerance must be ${range} (received: ${input.safetyTolerance})`);
+  if (input.safetyTolerance !== undefined && constraint.safetyTolerance) {
+    const ceiling = (input.imageCount ?? 0) > 0 && constraint.safetyToleranceMaxWithImages !== undefined
+      ? Math.min(constraint.safetyTolerance.maximum, constraint.safetyToleranceMaxWithImages)
+      : constraint.safetyTolerance.maximum;
+    if (!Number.isInteger(input.safetyTolerance) || input.safetyTolerance < constraint.safetyTolerance.minimum || input.safetyTolerance > ceiling) {
+      const withImagesNote = constraint.safetyToleranceMaxWithImages !== undefined && ceiling !== constraint.safetyTolerance.maximum
+        ? ` while images are attached (text-only allows up to ${constraint.safetyTolerance.maximum})`
+        : '';
+      throw new ApiError('invalid_request', `${model} safety_tolerance must be ${constraint.safetyTolerance.minimum}-${ceiling}${withImagesNote} (received: ${input.safetyTolerance})`);
+    }
   }
   if (input.priority !== undefined && !constraint.supportsPriority) {
     throw new ApiError('invalid_request', `${model} does not support priority`);

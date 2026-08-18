@@ -320,6 +320,8 @@ export function registerGen(program: Command): void {
         thinkingLevel: opts.thinkingLevel,
         temperature: opts.temperature,
         topP: opts.topP,
+        referenceImageCount: opts.image?.length,
+        nonDataUriReferenceCount: opts.image?.filter((source) => !source.trim().startsWith('data:')).length,
       });
       const suppliedConfig = parseGenerationConfig(opts.config);
       const suppliedResponseFormat = suppliedConfig.responseFormat;
@@ -441,7 +443,8 @@ export function registerGen(program: Command): void {
     .option('--seed <n>', '模型随机种子（非负整数）', (v) => Number.parseInt(v, 10))
     .option('--fps <n>', '输出帧率（仅支持该参数的模型生效）', (v) => Number.parseInt(v, 10))
     .option('--safety-tolerance <n>', '安全容忍度（仅支持该参数的模型生效）', (v) => Number.parseInt(v, 10))
-    .option('--image <url...>', '图生视频的源图像 URL，可多个')
+    .option('--image <url...>', '参考图 URL（Grok 视频为 reference-to-video 模式，可多个）')
+    .option('--first-frame <url>', '图生视频首帧图 URL（image-to-video 模式；与 --image 互斥）')
     .option('--generate-audio <boolean>', '是否生成音频（只接受 true 或 false）', (v) => parseBooleanOption(v, 'generate-audio'))
     .option('--watermark <boolean>', '是否添加水印（只接受 true 或 false）', (v) => parseBooleanOption(v, 'watermark'))
     .option('--service-tier <tier>', '服务层级（Seedance 2.0 默认 default）')
@@ -459,7 +462,7 @@ export function registerGen(program: Command): void {
       async (
         promptParts: string[],
         opts: {
-          model?: string; seconds?: number; size?: string; resolution?: string; ratio?: string; aspectRatio?: string; seed?: number; fps?: number; safetyTolerance?: number; image?: string[]; content?: string;
+          model?: string; seconds?: number; size?: string; resolution?: string; ratio?: string; aspectRatio?: string; seed?: number; fps?: number; safetyTolerance?: number; image?: string[]; firstFrame?: string; content?: string;
           generateAudio?: boolean; watermark?: boolean; serviceTier?: string; priority?: number; callbackUrl?: string;
           returnLastFrame?: boolean; executionExpiresAfter?: number; safetyIdentifier?: string;
           wait?: boolean; pollInterval: number; timeout: number; out: string;
@@ -479,6 +482,7 @@ export function registerGen(program: Command): void {
         }
         if (opts.size) body.size = opts.size;
         if (opts.image) body.images = opts.image;
+        if (opts.firstFrame) body.image = opts.firstFrame;
         if (opts.resolution) metadata.resolution = opts.resolution.toLowerCase();
         if (opts.ratio) metadata.ratio = opts.ratio;
         if (opts.aspectRatio) metadata.ratio = opts.aspectRatio;
@@ -506,6 +510,10 @@ export function registerGen(program: Command): void {
           priority: opts.priority,
           executionExpiresAfter: opts.executionExpiresAfter,
           safetyIdentifier: opts.safetyIdentifier,
+          imageCount: opts.image?.length,
+          firstFrameCount: opts.firstFrame ? 1 : 0,
+          generateAudio: opts.generateAudio,
+          watermark: opts.watermark,
         });
         if (Object.keys(metadata).length > 0) body.metadata = metadata;
 
@@ -526,7 +534,7 @@ export function registerGen(program: Command): void {
             printJson({ model, task_id: taskId, submitted: true, next_command: `focalapi task status ${taskId} --json` });
           } else {
             process.stdout.write(taskId + '\n');
-            info(`任务已提交。续取：focalapi task status ${taskId} / focalapi task download ${taskId}`);
+            info(`任务已提交。续取：focalapi task status ${taskId} / focalapi task download ${taskId}；排队中可取消：focalapi task cancel ${taskId}`);
           }
           return;
         }

@@ -53,6 +53,8 @@ export const ERROR_HINTS: Record<string, string> = {
   insufficient_quota:
     '账户额度不足。前往 https://focalapi.com/console/topup 充值；可运行 focalapi usage 查看当前额度。',
   rate_limited: '请求触发限流，请稍后重试。',
+  capacity_exhausted:
+    '平台创作容量已满（排队准入达到上限，HTTP 503）。服务端建议约 10 秒后重试：直接重跑同一条命令即可，无需修改参数或更换模型。',
   model_not_found: '模型不存在或未对你的 Key 开放。运行 focalapi models list 查看可用模型。',
   network_error:
     '无法连接 focalapi 服务。检查网络代理与 FOCALAPI_BASE_URL 配置；可运行 focalapi doctor 做链路诊断。',

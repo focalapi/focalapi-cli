@@ -28,6 +28,7 @@ focalapi gen video "<user prompt>" --no-wait -o ./focalapi-out --json
 # Continue an asynchronous video task.
 focalapi task status <task-id> --json
 focalapi task download <task-id> -o ./focalapi-out --json
+focalapi task cancel <task-id> --json   # queued tasks only; cancelled tasks are refunded
 ```
 
 ## Routing table
@@ -37,7 +38,7 @@ focalapi task download <task-id> -o ./focalapi-out --json
 | Generate or edit images; create from reference images | `focalapi gen image` | focalapi-gen |
 | Generate video; animate images or reference media | `focalapi gen video` | focalapi-gen |
 | Select, compare, or inspect model parameters | `focalapi models resolve/get/search` | focalapi-models |
-| Inspect progress or failures; download results | `focalapi task status/download` | focalapi-task |
+| Inspect progress or failures; cancel queued tasks; download results | `focalapi task status/cancel/download` | focalapi-task |
 | Resolve key, sign-in, or 401 issues | `focalapi auth status/login` | focalapi-auth |
 | Inspect quota, usage, or service failures | `focalapi usage/doctor` | focalapi-usage |
 | Provide text assistance explicitly requested by the user | `focalapi chat` | focalapi-chat |

@@ -4,12 +4,12 @@
 
 import { Command } from 'commander';
 import { resolveAuth } from '../lib/config.js';
-import { downloadTaskContent, fetchTask } from '../lib/tasks.js';
+import { cancelTask, downloadTaskContent, fetchTask } from '../lib/tasks.js';
 import { info, printJson, printTable } from '../lib/output.js';
 import type { GlobalOpts } from '../cli.js';
 
 export function registerTask(program: Command): void {
-  const task = program.command('task').description('任务查询与产物下载（视频等任务制能力）');
+  const task = program.command('task').description('任务查询、取消与产物下载（视频等任务制能力）');
 
   task
     .command('status')
@@ -33,6 +33,24 @@ export function registerTask(program: Command): void {
         if (info_.status === 'success') {
           info(`产物下载：focalapi task download ${taskId}`);
         }
+        if (info_.status === 'pending' || info_.status === 'running') {
+          info(`如需停止排队中的任务：focalapi task cancel ${taskId}`);
+        }
+      }
+    });
+
+  task
+    .command('cancel')
+    .description('取消排队中的任务（运行中的任务不可取消；取消后费用自动退还）')
+    .argument('<task_id>', '任务 ID')
+    .action(async (taskId: string, _opts: unknown, cmd: Command) => {
+      const g = cmd.optsWithGlobals() as GlobalOpts;
+      const auth = resolveAuth(g);
+      await cancelTask(auth.baseUrl, auth.apiKey, taskId);
+      if (g.json) {
+        printJson({ task_id: taskId, status: 'cancelled', cancelled: true });
+      } else {
+        info(`✓ 任务 ${taskId} 已取消`);
       }
     });
 

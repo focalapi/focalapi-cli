@@ -52,6 +52,14 @@ describe('任务状态归一化', () => {
     expect(normalizeTaskStatus('whatever')).toBe('unknown');
     expect(normalizeTaskStatus(undefined)).toBe('unknown');
   });
+
+  it('cancelled 独立终态；expired 归失败；queued_* 前缀族归等待（平台状态归一）', () => {
+    expect(normalizeTaskStatus('cancelled')).toBe('cancelled');
+    expect(normalizeTaskStatus('CANCELED')).toBe('cancelled');
+    expect(normalizeTaskStatus('expired')).toBe('failed');
+    expect(normalizeTaskStatus('queued_waiting')).toBe('pending');
+    expect(normalizeTaskStatus('queued_limited')).toBe('pending');
+  });
 });
 
 describe('任务 ID / 进度提取（宽容解析多渠道上游）', () => {

@@ -5,7 +5,7 @@
  * go to stderr so Agents can safely compose `focalapi ... --json | jq`.
  */
 
-import { ApiError } from './errors.js';
+import { ApiError, ERROR_HINTS } from './errors.js';
 
 export interface OutputOptions {
   json?: boolean;
@@ -67,8 +67,19 @@ export function warn(message: string): void {
 }
 
 /** Unified error output: structured JSON in JSON mode, otherwise human-readable text. The caller sets the exit code. */
-export function printError(err: unknown, opts?: OutputOptions): void {
-  if (err instanceof ApiError) {
+export function printError(errInput: unknown, opts?: OutputOptions): void {
+  if (errInput instanceof ApiError) {
+    // Fall back to the per-code hint table so codes raised inside the HTTP layer
+    // (for example capacity_exhausted) always ship a next action to the caller.
+    const err = !errInput.hint && ERROR_HINTS[errInput.code]
+      ? new ApiError(errInput.code, errInput.message, {
+          status: errInput.status,
+          hint: ERROR_HINTS[errInput.code],
+          body: errInput.body,
+          upstreamCode: errInput.upstreamCode,
+          requestId: errInput.requestId,
+        })
+      : errInput;
     if (opts?.json) {
       printJson(err.toJSON());
     } else {
@@ -86,7 +97,7 @@ export function printError(err: unknown, opts?: OutputOptions): void {
     }
     return;
   }
-  const message = err instanceof Error ? err.message : String(err);
+  const message = errInput instanceof Error ? errInput.message : String(errInput);
   if (opts?.json) {
     printJson({ error: { code: 'internal_error', message } });
   } else {
