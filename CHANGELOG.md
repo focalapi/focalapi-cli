@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.3.0 - 2026-08-18
+
+- Added `task cancel` for queued tasks through `DELETE /v1/video/generations/{task_id}`, including the 409 `task_already_running` / `task_already_finished` and 502 `task_cancel_failed` contract with actionable hints.
+- Added `gen video --first-frame <url>` for image-to-video and made `--image` the reference-media channel; Grok 1.5 reference-to-video is capped at 720p and 7 images locally, the legacy Grok video model rejects references outright, and the two flags are mutually exclusive.
+- Accepted the new Seedance 2.5 1080p tier and wired per-model reference-image caps (Seedance, Omni, Kling, Vidu, LTX, FLUX).
+- Aligned Gemini image validation: `gemini-2.5-flash-image` accepts at most 1 `inlineData` reference, `gemini-3.1-flash-image` gains the 15-value ratio surface and `thinkingLevel`/`temperature`/`topP`, and seeds are capped at `Number.MAX_SAFE_INTEGER`.
+- Corrected `seedream-4-0-250828` default size to `2k`, lowered the Vidu seed ceiling to 2147483647, and capped FLUX 3 `safety_tolerance` at 2 whenever images are attached.
+- Normalized task statuses `cancelled`, `expired`, and the `queued_*` family, with refund-aware messaging for expired tasks.
+- Mapped the platform's 503 `capacity_exhausted` signal to a stable retryable error code with a retry hint instead of a generic server error.
+- Refreshed the bundled Agent Skills and README with the cancel workflow, capacity retry guidance, and the Grok video mode contract.
+
 ## 0.2.2 - 2026-08-14
 
 - Removed the retired Veo 3.1 preview models from automatic video selection and local validation.
