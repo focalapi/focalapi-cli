@@ -2,7 +2,7 @@
  * Command-level integration tests that exercise the complete main(argv) path with routed fetch mocks.
  */
 
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import { main } from '../src/cli.js';
@@ -976,6 +976,52 @@ describe('gen video metadata content', () => {
 });
 
 describe('task list + wait + idempotency key', () => {
+  it('inlines local reference media via @file into all gen paths with size guards', async () => {
+    const png = Buffer.from('local-ref-media').toString('base64');
+    let capturedBody: Record<string, unknown> | undefined;
+    vi.stubGlobal(
+      'fetch',
+      mockFetchRouter({
+        '/v1/video/generations': (init) => {
+          capturedBody = JSON.parse(String(init?.body)) as Record<string, unknown>;
+          return { task_id: 'atfile-1', status: 'submitted' };
+        },
+      }),
+    );
+    const localRef = join(ctx.homeDir, 'ref.png');
+    writeFileSync(localRef, Buffer.from('local-ref-media'));
+
+    expect(await main(argv('gen', 'video', 'x', '-m', 'grok-imagine-video-1.5', '--image', `@${localRef}`, '--no-wait', '--json'))).toBe(0);
+    expect(String((capturedBody?.images as string[])[0])).toMatch(/^data:image\/png;base64,/);
+
+    // 缺失文件与超限文件都在本地拒绝，不发请求。
+    const spy = mockFetchRouter({});
+    vi.stubGlobal('fetch', spy);
+    expect(await main(argv('gen', 'video', 'x', '-m', 'grok-imagine-video-1.5', '--image', '@/nonexistent/ref.png', '--no-wait', '--json'))).toBe(1);
+    const oversized = join(ctx.homeDir, 'big.png');
+    writeFileSync(oversized, Buffer.alloc(8 * 1024 * 1024 + 1));
+    expect(await main(argv('gen', 'video', 'x', '-m', 'grok-imagine-video-1.5', '--image', `@${oversized}`, '--no-wait', '--json'))).toBe(1);
+    expect(spy).not.toHaveBeenCalled();
+  });
+
+  it('gen gemini-image accepts a local reference via @file as inlineData', async () => {
+    let capturedBody: Record<string, unknown> | undefined;
+    vi.stubGlobal(
+      'fetch',
+      mockFetchRouter({
+        '/v1beta/models/gemini-3.1-flash-image:generateContent': (init) => {
+          capturedBody = JSON.parse(String(init?.body)) as Record<string, unknown>;
+          return { candidates: [{ content: { parts: [{ inlineData: { mimeType: 'image/png', data: 'ZmFrZQ==' } }] } }] };
+        },
+      }),
+    );
+    const localRef = join(ctx.homeDir, 'gemref.png');
+    writeFileSync(localRef, Buffer.from('gem-ref'));
+    expect(await main(argv('gen', 'gemini-image', 'x', '-m', 'gemini-3.1-flash-image', '--image', `@${localRef}`, '--json'))).toBe(0);
+    const parts = ((capturedBody?.contents as Array<{ parts: Array<{ inlineData?: { mimeType?: string } }> }>)[0])?.parts;
+    expect(parts?.[1]?.inlineData?.mimeType).toBe('image/png');
+  });
+
   it('task list returns the caller\'s recent tasks', async () => {
     vi.stubGlobal(
       'fetch',

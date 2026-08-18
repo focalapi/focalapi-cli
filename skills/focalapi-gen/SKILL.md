@@ -31,7 +31,7 @@ focalapi gen image "<prompt>" -m <model-id> [contract-supported options] -o ./fo
 focalapi gen video "<prompt>" -m <model-id> [contract-supported options] --no-wait -o ./focalapi-out --json
 ```
 
-- Use `--image <url...>` for image editing and reference images. Pass `--mask` only when the contract lists it.
+- Use `--image <url...>` for image editing and reference images. Local files work directly with the `@` prefix (`--image @C:/path/ref.jpg`, inlined as a data URI; per-file ≤8MB, per-command ≤12MB — larger sets must be hosted as URLs first). Pass `--mask` only when the contract lists it.
 - Use `--negative-prompt`, `--creativity`, `--prompt-extend`, `--style-references`, and `--moodboards` only when the image contract lists the corresponding field.
 - For video inputs, `--image <url...>` means reference images (Grok 1.5 reference-to-video, capped at 720p and 7 images) and `--first-frame <url>` means image-to-video from a single starting frame. The two flags are mutually exclusive and both are validated against the live contract before submission.
 - Pass duration, resolution, aspect ratio, and audio options only as allowed by `supported_params`.

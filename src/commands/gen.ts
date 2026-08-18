@@ -7,8 +7,8 @@
  */
 
 import { createWriteStream } from 'node:fs';
-import { mkdir, writeFile } from 'node:fs/promises';
-import { join, resolve } from 'node:path';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { extname, join, resolve } from 'node:path';
 import { pipeline } from 'node:stream/promises';
 import { Readable } from 'node:stream';
 import { randomUUID } from 'node:crypto';
@@ -153,6 +153,59 @@ function parseJsonArray(raw: string, option: string): unknown[] {
   }
 }
 
+// 本地参考媒体：`--image @C:/path/x.jpg` 读文件内联为 data URI。大小护栏
+// 防止把请求体撑爆（base64 再膨胀 33%）；更大的图/更多图请先托管成 URL
+// （生产实证：本地路径直接传入会得到 400 invalid_reference_url 指引）。
+const MAX_LOCAL_MEDIA_BYTES = 8 * 1024 * 1024;
+const MAX_TOTAL_LOCAL_MEDIA_BYTES = 12 * 1024 * 1024;
+
+const MEDIA_MIME_BY_EXT: Record<string, string> = {
+  '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png', '.webp': 'image/webp', '.gif': 'image/gif',
+  '.mp4': 'video/mp4', '.webm': 'video/webm', '.mov': 'video/quicktime',
+  '.mp3': 'audio/mpeg', '.wav': 'audio/wav',
+};
+
+async function resolveMediaInputs(sources: Array<string | undefined>): Promise<string[]> {
+  let totalLocalBytes = 0;
+  const resolved: string[] = [];
+  for (const source of sources) {
+    if (!source) continue;
+    if (!source.startsWith('@')) {
+      resolved.push(source);
+      continue;
+    }
+    const path = source.slice(1);
+    let content: Buffer;
+    try {
+      content = await readFile(path);
+    } catch (err) {
+      throw new ApiError('invalid_request', `读取本地媒体失败 @${path}：${(err as Error).message}`, {
+        hint: '@ 后面是文件路径（如 --image @C:/imgs/ref.png）。若文件在别的主机上，请先托管并传 http(s) URL。',
+      });
+    }
+    const ext = extname(path).toLowerCase();
+    const mime = MEDIA_MIME_BY_EXT[ext];
+    if (!mime) {
+      throw new ApiError('invalid_request', `不支持的本地媒体类型 ${ext}（@${path}）`, {
+        hint: `支持：${Object.keys(MEDIA_MIME_BY_EXT).join(' ')}`,
+      });
+    }
+    if (content.byteLength > MAX_LOCAL_MEDIA_BYTES) {
+      throw new ApiError('invalid_request', `本地媒体 @${path} 为 ${(content.byteLength / 1048576).toFixed(1)}MB，超过单文件 ${(MAX_LOCAL_MEDIA_BYTES / 1048576)}MB 上限`, {
+        hint: '大文件请先压缩或托管为 URL 再传入；命令行内联仅适合中小图。',
+      });
+    }
+    totalLocalBytes += content.byteLength;
+    if (totalLocalBytes > MAX_TOTAL_LOCAL_MEDIA_BYTES) {
+      throw new ApiError('invalid_request', `本地媒体总量超过 ${(MAX_TOTAL_LOCAL_MEDIA_BYTES / 1048576)}MB 上限`, {
+        hint: '多张大图请先托管为 URL（生成类接口返回的产物 URL 可直接复用）。',
+      });
+    }
+    resolved.push(`data:${mime};base64,${content.toString('base64')}`);
+  }
+  return resolved;
+}
+
 function parseGeminiResponseModalities(raw: string): string[] {
   const modalities = raw.split(',').map((value) => value.trim().toUpperCase()).filter(Boolean);
   const unique = new Set(modalities);
@@ -220,7 +273,7 @@ export function registerGen(program: Command): void {
     .option('--watermark <boolean>', '是否添加水印（仅支持该参数的模型生效）', (v) => parseBooleanOption(v, 'watermark'))
     .option('--output-format <format>', '输出格式（仅 Seedream：png 或 jpeg）')
     .option('--optimize-prompt <mode>', '提示词优化（仅 Seedream：auto、enabled 或 disabled）')
-    .option('--image <url...>', '参考图或编辑图 URL，可多个')
+    .option('--image <url...>', '参考图/编辑图 URL 或本地路径（@C:/path/x.jpg 自动内联），可多个')
     .option('--mask <url>', '编辑 mask URL（gpt-image-2 需要单张参考图）')
     .option('--response-format <format>', '图像响应格式：url 或 b64_json')
     .option('--n <count>', '张数（1–128）', (v) => Number.parseInt(v, 10), 1)
@@ -235,6 +288,8 @@ export function registerGen(program: Command): void {
       const n = clampInt(opts.n, 1, MAX_IMAGE_N, 'n');
       const styleReferences = opts.styleReferences ? parseJsonArray(opts.styleReferences, 'style-references') : undefined;
       const moodboards = opts.moodboards ? parseJsonArray(opts.moodboards, 'moodboards') : undefined;
+      const referenceImages = await resolveMediaInputs(opts.image ?? []);
+      const maskImage = (await resolveMediaInputs(opts.mask ? [opts.mask] : []))[0];
       validateImageGeneration(model, {
         n,
         size: opts.size,
@@ -252,8 +307,8 @@ export function registerGen(program: Command): void {
         styleReferenceCount: styleReferences?.length,
         moodboardCount: moodboards?.length,
         responseFormat: opts.responseFormat,
-        imageCount: opts.image?.length,
-        hasMask: Boolean(opts.mask),
+        imageCount: referenceImages.length,
+        hasMask: Boolean(maskImage),
       });
       if (opts.wait === false && opts.responseFormat === 'b64_json') {
         throw new ApiError('invalid_request', '--response-format b64_json cannot be used with --no-wait; use url');
@@ -273,12 +328,12 @@ export function registerGen(program: Command): void {
       if (opts.watermark !== undefined) body.watermark = opts.watermark;
       if (opts.outputFormat) body.output_format = opts.outputFormat.toLowerCase();
       if (opts.optimizePrompt) body.optimize_prompt_options = { thinking: opts.optimizePrompt.toLowerCase() };
-      if (opts.image) body.image = opts.image;
-      if (opts.mask) body.mask = opts.mask;
+      if (referenceImages.length > 0) body.image = referenceImages;
+      if (maskImage) body.mask = maskImage;
       if (opts.responseFormat) body.response_format = opts.responseFormat;
 
       const idempotencyKey = opts.wait === false ? resolveIdempotencyKey(opts.idempotencyKey) : undefined;
-      warnDoubleEncodedReferenceURLs('--image', opts.image ?? []);
+      warnDoubleEncodedReferenceURLs('--image', referenceImages);
       const res = await withProgress(opts.wait === false ? '正在提交图像任务' : '正在生成图像', () => request<{ created?: number; data?: ImageResultItem[]; id?: string; status?: string; idempotent_replay?: boolean }>({
         baseUrl: auth.baseUrl,
         path: '/v1/images/generations',
@@ -333,7 +388,7 @@ export function registerGen(program: Command): void {
     .option('--response-modalities <modalities>', '输出类型：IMAGE 或 IMAGE,TEXT；未传时由服务端默认 IMAGE,TEXT')
     .option('--config <json>', '附加 Gemini generationConfig JSON；命令固定 responseFormat.image 和单候选')
     .option('-o, --out <dir>', '输出目录', DEFAULT_OUT_DIR)
-    .option('--image <url...>', 'Gemini reference image URL or data URI; repeatable')
+    .option('--image <url...>', 'Gemini reference image URL, data URI, or local path (@C:/path/x.jpg); repeatable')
     .option('--system <text>', 'Gemini systemInstruction text')
     .option('--seed <n>', 'Non-negative Gemini generation seed', (v) => Number.parseInt(v, 10))
     .option('--thinking-level <level>', 'Nano Banana 2 Lite: MINIMAL or HIGH')
@@ -342,15 +397,16 @@ export function registerGen(program: Command): void {
     .action(async (promptParts: string[], opts: { model: string; aspectRatio?: string; imageSize?: string; responseModalities?: string; image?: string[]; system?: string; seed?: number; thinkingLevel?: string; temperature?: number; topP?: number; config?: string; out: string }, cmd: Command) => {
       const g = cmd.optsWithGlobals() as GlobalOpts;
       const auth = resolveAuth(g);
+      const geminiReferenceImages = await resolveMediaInputs(opts.image ?? []);
       validateGeminiImageGeneration(opts.model, {
+        referenceImageCount: geminiReferenceImages.length,
+        nonDataUriReferenceCount: geminiReferenceImages.filter((source) => !source.startsWith('data:')).length,
         aspectRatio: opts.aspectRatio,
         imageSize: opts.imageSize,
         seed: opts.seed,
         thinkingLevel: opts.thinkingLevel,
         temperature: opts.temperature,
         topP: opts.topP,
-        referenceImageCount: opts.image?.length,
-        nonDataUriReferenceCount: opts.image?.filter((source) => !source.trim().startsWith('data:')).length,
       });
       const suppliedConfig = parseGenerationConfig(opts.config);
       const suppliedResponseFormat = suppliedConfig.responseFormat;
@@ -379,7 +435,7 @@ export function registerGen(program: Command): void {
         path: `/v1beta/models/${encodeURIComponent(opts.model)}:generateContent`,
         apiKey: auth.apiKey,
         body: {
-          contents: [{ role: 'user', parts: [{ text: promptParts.join(' ') }, ...(opts.image ?? []).map(geminiImagePart)] }],
+          contents: [{ role: 'user', parts: [{ text: promptParts.join(' ') }, ...geminiReferenceImages.map(geminiImagePart)] }],
           ...(opts.system ? { systemInstruction: { parts: [{ text: opts.system }] } } : {}),
           generationConfig,
         },
@@ -473,7 +529,7 @@ export function registerGen(program: Command): void {
     .option('--seed <n>', '模型随机种子（非负整数）', (v) => Number.parseInt(v, 10))
     .option('--fps <n>', '输出帧率（仅支持该参数的模型生效）', (v) => Number.parseInt(v, 10))
     .option('--safety-tolerance <n>', '安全容忍度（仅支持该参数的模型生效）', (v) => Number.parseInt(v, 10))
-    .option('--image <url...>', '参考图 URL（Grok 视频为 reference-to-video 模式，可多个）')
+    .option('--image <url...>', '参考图 URL 或本地路径（@C:/path/x.jpg），Grok 视频为 reference-to-video 模式')
     .option('--first-frame <url>', '图生视频首帧图 URL（image-to-video 模式；与 --image 互斥）')
     .option('--generate-audio <boolean>', '是否生成音频（只接受 true 或 false）', (v) => parseBooleanOption(v, 'generate-audio'))
     .option('--watermark <boolean>', '是否添加水印（只接受 true 或 false）', (v) => parseBooleanOption(v, 'watermark'))
@@ -516,8 +572,10 @@ export function registerGen(program: Command): void {
           body.duration = secondsValue;
         }
         if (opts.size) body.size = opts.size;
-        if (opts.image) body.images = opts.image;
-        if (opts.firstFrame) body.image = opts.firstFrame;
+        const videoReferenceImages = await resolveMediaInputs(opts.image ?? []);
+        const firstFrameImage = (await resolveMediaInputs(opts.firstFrame ? [opts.firstFrame] : []))[0];
+        if (videoReferenceImages.length > 0) body.images = videoReferenceImages;
+        if (firstFrameImage) body.image = firstFrameImage;
         if (opts.resolution) metadata.resolution = opts.resolution.toLowerCase();
         if (opts.ratio) metadata.ratio = opts.ratio;
         if (opts.aspectRatio) metadata.ratio = opts.aspectRatio;
@@ -545,15 +603,15 @@ export function registerGen(program: Command): void {
           priority: opts.priority,
           executionExpiresAfter: opts.executionExpiresAfter,
           safetyIdentifier: opts.safetyIdentifier,
-          imageCount: opts.image?.length,
-          firstFrameCount: opts.firstFrame ? 1 : 0,
+          imageCount: videoReferenceImages.length,
+          firstFrameCount: firstFrameImage ? 1 : 0,
           generateAudio: opts.generateAudio,
           watermark: opts.watermark,
         });
         if (Object.keys(metadata).length > 0) body.metadata = metadata;
 
         const idempotencyKey = resolveIdempotencyKey(opts.idempotencyKey);
-        warnDoubleEncodedReferenceURLs('--image/--first-frame', [...(opts.image ?? []), opts.firstFrame]);
+        warnDoubleEncodedReferenceURLs('--image/--first-frame', [...videoReferenceImages, firstFrameImage]);
         const created = await withProgress('正在提交视频任务', () => request<{ task_id?: string; id?: string; status?: string; idempotent_replay?: boolean }>({
           baseUrl: auth.baseUrl,
           path: '/v1/video/generations',
