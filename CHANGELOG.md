@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.3.1 - 2026-08-18
+
+- Added `--duration` as an alias of `--seconds` on `gen video` so the API contract field name works directly; conflicting values are rejected locally.
+- Emitted a stderr breadcrumb (`task_id=...`) for every `--no-wait` submission so callers that fail to parse stdout JSON can recover the task instead of resubmitting and double-charging.
+- Added case-sensitive ID transcription guidance to `task status`/`task cancel` 404 errors (`l`/`1`/`I`, `O`/`0`) with an explicit warning against blind resubmission.
+- Updated the bundled Agent Skills with resubmission discipline, the Windows `.cmd` shim invocation requirement, and exact task-ID copying guidance.
+
 ## 0.3.0 - 2026-08-18
 
 - Added `task cancel` for queued tasks through `DELETE /v1/video/generations/{task_id}`, including the 409 `task_already_running` / `task_already_finished` and 502 `task_cancel_failed` contract with actionable hints.
