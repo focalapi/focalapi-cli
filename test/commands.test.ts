@@ -1001,6 +1001,9 @@ describe('task list + wait + idempotency key', () => {
     const oversized = join(ctx.homeDir, 'big.png');
     writeFileSync(oversized, Buffer.alloc(8 * 1024 * 1024 + 1));
     expect(await main(argv('gen', 'video', 'x', '-m', 'grok-imagine-video-1.5', '--image', `@${oversized}`, '--no-wait', '--json'))).toBe(1);
+    // 裸本地路径（无 @ 前缀）本地拦截并给出加 @ 的指引。
+    expect(await main(argv('gen', 'video', 'x', '-m', 'grok-imagine-video-1.5', '--image', 'C:/Users/x/ref.png', '--no-wait', '--json'))).toBe(1);
+    expect(ctx.stderr()).toContain('@C:/imgs/ref.png');
     expect(spy).not.toHaveBeenCalled();
   });
 

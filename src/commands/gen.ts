@@ -171,6 +171,15 @@ async function resolveMediaInputs(sources: Array<string | undefined>): Promise<s
   for (const source of sources) {
     if (!source) continue;
     if (!source.startsWith('@')) {
+      // 既不是 @ 本地路径、也不是 data:/http(s) URL 的值注定被服务端
+      // 400 拒绝（invalid_reference_url）；在本地拦截并直接给出可执行
+      // 指引，省一次往返（生产实证：C:\... 裸路径曾被当 URL 提交）。
+      const lowered = source.toLowerCase();
+      if (!source.startsWith('data:') && !lowered.startsWith('http://') && !lowered.startsWith('https://')) {
+        throw new ApiError('invalid_request', `参考媒体必须是 http(s) URL、data URI 或 @本地路径（收到：${source.slice(0, 80)}）`, {
+          hint: '本地文件请加 @ 前缀内联（如 --image @C:/imgs/ref.png，单文件 ≤8MB）；大图/多图请先托管为 URL 再传入。',
+        });
+      }
       resolved.push(source);
       continue;
     }
