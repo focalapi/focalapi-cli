@@ -524,6 +524,21 @@ describe('task cancel + capacity signal', () => {
     expect(out.error.hint).toContain('focalapi task status task-running');
   });
 
+  it('task download exposes both file and files for parser compatibility', async () => {
+    const png = Buffer.from('download-bytes').toString('base64');
+    vi.stubGlobal(
+      'fetch',
+      mockFetchRouter({
+        '/v1/videos/task-dl-1/content': () => new Response(png, { status: 200, headers: { 'content-type': 'image/png' } }),
+      }),
+    );
+    const outDir = join(ctx.homeDir, 'task-dl-out');
+    expect(await main(argv('task', 'download', 'task-dl-1', '-o', outDir, '--json'))).toBe(0);
+    const out = parseStdoutJson() as { file: string; files: string[] };
+    expect(out.file).toBeTruthy();
+    expect(out.files).toEqual([out.file]);
+  });
+
   it('turns the 503 capacity_exhausted signal into a retryable error code', async () => {
     vi.stubGlobal(
       'fetch',

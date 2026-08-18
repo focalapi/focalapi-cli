@@ -154,7 +154,8 @@ export function registerTask(program: Command): void {
       const auth = resolveAuth(g);
       const filePath = await downloadTaskContent(auth.baseUrl, auth.apiKey, taskId, opts.out);
       if (g.json) {
-        printJson({ task_id: taskId, file: filePath });
+        // files（复数）与 gen image 的输出对齐；file 保留向后兼容。
+        printJson({ task_id: taskId, file: filePath, files: [filePath] });
       } else {
         info(`✓ ${filePath}`);
       }
