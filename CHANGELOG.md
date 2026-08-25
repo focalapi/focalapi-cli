@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.5.1 - 2026-08-26
+
+- Added `@file` support to `--style-references` and `--moodboards`: the JSON array can now be read from a file instead of inline argv. Windows `cmd` mangles embedded double quotes in JSON arguments (matrix-run evidence 2026-08-25), and the file source sidesteps shell quoting entirely.
+
 ## 0.5.0 - 2026-08-25
 
 - Fixed `krea-2-medium/-turbo/large` reference-image validation: the local table said 0 while the platform contract accepts up to 10 reference images (each maps to a Krea style reference), so every `gen image --image` edit was rejected locally without reaching the server (2026-08-25 live audit P01).
