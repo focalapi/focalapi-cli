@@ -14,7 +14,7 @@ import { Readable } from 'node:stream';
 import { randomUUID } from 'node:crypto';
 import { Command } from 'commander';
 import { ApiError } from '../lib/errors.js';
-import { resolveAuth } from '../lib/config.js';
+import { normalizeHomePath, resolveAuth } from '../lib/config.js';
 import { request } from '../lib/http.js';
 import { validateGeminiImageGeneration, getImageConstraint, validateImageGeneration, validateVideoGeneration } from '../lib/model-capabilities.js';
 import { resolveCreativeModel } from '../lib/model-selection.js';
@@ -150,6 +150,18 @@ function parseJsonArray(raw: string, option: string): unknown[] {
     return parsed;
   } catch {
     throw new ApiError('invalid_request', `--${option} must be a JSON array`);
+  }
+}
+
+// --style-references/--moodboards 支持 @file：Windows cmd 下内嵌双引号的
+// JSON 会被 shell 解析损坏（2026-08-25 矩阵实测），文件来源彻底规避。
+async function readJsonArrayArgument(raw: string, option: string): Promise<unknown[]> {
+  if (!raw.startsWith('@')) return parseJsonArray(raw, option);
+  try {
+    return parseJsonArray((await readFile(normalizeHomePath(raw.slice(1)), 'utf8')).trim(), option);
+  } catch (error) {
+    if (error instanceof ApiError) throw error;
+    throw new ApiError('invalid_request', `--${option} @file 无法读取：${raw.slice(1, 120)}`);
   }
 }
 
@@ -326,8 +338,8 @@ export function registerGen(program: Command): void {
       const model = opts.model ?? (await resolveCreativeModel(auth, 'image')).model.id;
       if (!opts.model && !g.json) info(`已自动选择图像模型：${model}`);
       const n = clampInt(opts.n, 1, MAX_IMAGE_N, 'n');
-      const styleReferences = opts.styleReferences ? parseJsonArray(opts.styleReferences, 'style-references') : undefined;
-      const moodboards = opts.moodboards ? parseJsonArray(opts.moodboards, 'moodboards') : undefined;
+      const styleReferences = opts.styleReferences ? await readJsonArrayArgument(opts.styleReferences, 'style-references') : undefined;
+      const moodboards = opts.moodboards ? await readJsonArrayArgument(opts.moodboards, 'moodboards') : undefined;
       const referenceImages = await resolveMediaInputs(opts.image ?? []);
       const maskImage = (await resolveMediaInputs(opts.mask ? [opts.mask] : []))[0];
       validateImageGeneration(model, {

@@ -3,6 +3,7 @@
  */
 
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import { main } from '../src/cli.js';
@@ -418,6 +419,34 @@ describe('gen image', () => {
     vi.stubGlobal('fetch', spy);
     expect(await main(argv('gen', 'image', 'x', '-m', 'gemini-3-pro-image', '--json'))).toBe(1);
     expect(await main(argv('gen', 'image', 'x', '-m', 'topaz-image-wonder-3-5', '--json'))).toBe(1);
+    expect(spy).not.toHaveBeenCalled();
+  });
+
+  it('reads --style-references from @file (Windows cmd quoting escape hatch, 2026-08-25 matrix)', async () => {
+    const png = Buffer.from('fake-png-bytes').toString('base64');
+    const styleFile = join(ctx.homeDir, 'style-refs.json');
+    await writeFile(styleFile, JSON.stringify([{ url: 'https://example.com/style.png', strength: 0.7 }]), 'utf8');
+    let capturedBody: Record<string, unknown> | undefined;
+    vi.stubGlobal(
+      'fetch',
+      mockFetchRouter({
+        '/v1/images/generations': (init) => {
+          capturedBody = JSON.parse(String(init?.body)) as Record<string, unknown>;
+          return { created: 1, data: [{ b64_json: png }] };
+        },
+      }),
+    );
+    const outDir = join(ctx.homeDir, 'krea-style-file-out');
+    expect(await main(argv(
+      'gen', 'image', 'x', '-m', 'krea-2-medium', '--style-references', `@${styleFile}`, '-o', outDir, '--json',
+    ))).toBe(0);
+    expect(capturedBody).toMatchObject({
+      image_style_references: [{ url: 'https://example.com/style.png', strength: 0.7 }],
+    });
+
+    const spy = mockFetchRouter({});
+    vi.stubGlobal('fetch', spy);
+    expect(await main(argv('gen', 'image', 'x', '-m', 'krea-2-medium', '--style-references', '@/nonexistent.json', '--json'))).toBe(1);
     expect(spy).not.toHaveBeenCalled();
   });
 
