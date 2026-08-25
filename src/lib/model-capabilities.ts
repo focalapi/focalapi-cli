@@ -17,8 +17,12 @@ type ImageGenerationConstraint = {
   defaultSize?: string;
   maxN: number;
   sizeTiers?: string[];
+  /** Allowed exact sizes from the official table (recraft V4). */
+  allowedSizes?: string[];
   maxReferenceImages?: number;
   maxTotalImages?: number;
+  /** Minimum input images the family requires (topaz/wavespeed/hitpaw/beeble/quiver i2svg need one). */
+  minImageCount?: number;
   minMegapixels?: number;
   maxMegapixels?: number;
   minEdge?: number;
@@ -29,11 +33,15 @@ type ImageGenerationConstraint = {
   backgrounds?: string[];
   aspectRatios?: string[];
   resolutions?: string[];
+  /** Wire key for --resolution (wavespeed reads target_resolution, not resolution). */
+  resolutionParam?: string;
   supportsSeed?: boolean;
   supportsWatermark?: boolean;
   outputFormats?: string[];
   optimizePromptModes?: string[];
   creativityModes?: string[];
+  /** --creativity is an integer in this range (topaz reimagine/bloom; krea uses string modes). */
+  integerCreativity?: [number, number];
   supportsNegativePrompt?: boolean;
   supportsPromptExtend?: boolean;
   maxStyleReferences?: number;
@@ -174,15 +182,15 @@ const IMAGE_CONSTRAINTS: Record<string, ImageGenerationConstraint> = {
     maxN: 9, maxReferenceImages: 1, aspectRatios: KLING_IMAGE_ASPECT_RATIOS, supportsNegativePrompt: true,
   },
   'krea-2-medium': {
-    maxN: 1, maxReferenceImages: 0, aspectRatios: KREA_IMAGE_ASPECT_RATIOS, resolutions: ['1k'], supportsSeed: true,
+    maxN: 1, maxReferenceImages: 10, aspectRatios: KREA_IMAGE_ASPECT_RATIOS, resolutions: ['1k'], supportsSeed: true,
     maxSeed: 2147483647, creativityModes: ['raw', 'low', 'medium', 'high'], maxStyleReferences: 10, maxMoodboards: 1,
   },
   'krea-2-medium-turbo': {
-    maxN: 1, maxReferenceImages: 0, aspectRatios: KREA_IMAGE_ASPECT_RATIOS, resolutions: ['1k'], supportsSeed: true,
+    maxN: 1, maxReferenceImages: 10, aspectRatios: KREA_IMAGE_ASPECT_RATIOS, resolutions: ['1k'], supportsSeed: true,
     maxSeed: 2147483647, creativityModes: ['raw', 'low', 'medium', 'high'], maxStyleReferences: 10, maxMoodboards: 1,
   },
   'krea-2-large': {
-    maxN: 1, maxReferenceImages: 0, aspectRatios: KREA_IMAGE_ASPECT_RATIOS, resolutions: ['1k'], supportsSeed: true,
+    maxN: 1, maxReferenceImages: 10, aspectRatios: KREA_IMAGE_ASPECT_RATIOS, resolutions: ['1k'], supportsSeed: true,
     maxSeed: 2147483647, creativityModes: ['raw', 'low', 'medium', 'high'], maxStyleReferences: 10, maxMoodboards: 1,
   },
   'qwen-image-3.0': {
@@ -195,7 +203,54 @@ const IMAGE_CONSTRAINTS: Record<string, ImageGenerationConstraint> = {
     maxMegapixels: 4.194304, maxAspectRatio: 8, supportsSeed: true, maxSeed: 2147483647,
     supportsNegativePrompt: true, supportsPromptExtend: true, supportsWatermark: true,
   },
+  'topaz-image-reimagine': {
+    maxN: 1, minImageCount: 1, maxReferenceImages: 1, integerCreativity: [1, 9],
+  },
+  'topaz-image-bloom-2': {
+    maxN: 1, minImageCount: 1, maxReferenceImages: 1,
+  },
+  'topaz-image-wonder-3-5': {
+    maxN: 1, minImageCount: 1, maxReferenceImages: 1,
+  },
+  'wavespeed-seedvr2-upscale': {
+    maxN: 1, minImageCount: 1, maxReferenceImages: 1, resolutions: ['2k', '4k', '8k'], resolutionParam: 'target_resolution',
+  },
+  'wavespeed-ultimate-upscale': {
+    maxN: 1, minImageCount: 1, maxReferenceImages: 1, resolutions: ['2k', '4k', '8k'], resolutionParam: 'target_resolution',
+  },
+  'quiver-text-to-svg': {
+    maxN: 1, maxReferenceImages: 4,
+  },
+  'quiver-image-to-svg': {
+    maxN: 1, minImageCount: 1, maxReferenceImages: 1,
+  },
+  'hitpaw-image-enhance': {
+    maxN: 1, minImageCount: 1, maxReferenceImages: 1,
+  },
+  'hitpaw-image-portrait-enhance': {
+    maxN: 1, minImageCount: 1, maxReferenceImages: 1,
+  },
+  'beeble-switchx-image-720p': {
+    maxN: 1, minImageCount: 1, maxReferenceImages: 2,
+  },
+  'beeble-switchx-image-1080p': {
+    maxN: 1, minImageCount: 1, maxReferenceImages: 2,
+  },
+  'recraft-v4': {
+    defaultSize: '1024x1024', maxN: 6, maxReferenceImages: 0,
+    allowedSizes: ['1024x1024', '1280x832', '832x1280', '1216x896', '896x1216', '1152x896', '896x1152',
+      '1536x768', '768x1536', '1344x768', '768x1344', '832x1344', '1280x896', '896x1280'],
+  },
+  'recraft-v4-pro': {
+    defaultSize: '2048x2048', maxN: 6, maxReferenceImages: 0,
+    allowedSizes: ['2048x2048', '2560x1664', '1664x2560', '2432x1792', '1792x2432', '2304x1792', '1792x2304',
+      '3072x1536', '1536x3072', '2688x1536', '1536x2688', '1664x2688', '2560x1792', '1792x2560'],
+  },
 };
+
+export function getImageConstraint(model: string): ImageGenerationConstraint | undefined {
+  return IMAGE_CONSTRAINTS[model.trim()];
+}
 
 const SEEDANCE_RATIOS = ['adaptive', '16:9', '4:3', '1:1', '3:4', '9:16', '21:9'];
 const GROK_VIDEO_ASPECT_RATIOS = ['auto', '16:9', '4:3', '3:2', '1:1', '2:3', '3:4', '9:16'];
@@ -341,10 +396,17 @@ export function validateImageGeneration(
   if (input.responseFormat && input.responseFormat !== 'url' && input.responseFormat !== 'b64_json') {
     throw new ApiError('invalid_request', `response_format must be url or b64_json (received: ${input.responseFormat})`);
   }
-  const constraint = IMAGE_CONSTRAINTS[model.trim()];
+  const trimmedModel = model.trim();
+  if (GEMINI_IMAGE_CONSTRAINTS[trimmedModel]) {
+    throw new ApiError('invalid_request', `${model} is a Gemini image model; use \`focalapi gen gemini-image\` (native generateContent endpoint) instead of \`gen image\``);
+  }
+  const constraint = IMAGE_CONSTRAINTS[trimmedModel];
   if (!constraint) return;
   if (input.n < 1 || input.n > constraint.maxN) {
     throw new ApiError('invalid_request', `${model} n must be 1-${constraint.maxN} (received: ${input.n})`);
+  }
+  if (input.imageCount !== undefined && constraint.minImageCount !== undefined && input.imageCount < constraint.minImageCount) {
+    throw new ApiError('invalid_request', `${model} requires at least ${constraint.minImageCount} input image${constraint.minImageCount === 1 ? '' : 's'}`);
   }
   if (input.imageCount !== undefined && constraint.maxReferenceImages !== undefined && input.imageCount > constraint.maxReferenceImages) {
     throw new ApiError('invalid_request', `${model} supports at most ${constraint.maxReferenceImages} reference images`);
@@ -361,7 +423,16 @@ export function validateImageGeneration(
   validateOptionalChoice(model, 'resolution', input.resolution, constraint.resolutions);
   validateOptionalChoice(model, 'output_format', input.outputFormat, constraint.outputFormats);
   validateOptionalChoice(model, 'optimize_prompt', input.optimizePrompt, constraint.optimizePromptModes);
-  validateOptionalChoice(model, 'creativity', input.creativity, constraint.creativityModes);
+  if (!constraint.integerCreativity) {
+    validateOptionalChoice(model, 'creativity', input.creativity, constraint.creativityModes);
+  }
+  if (input.creativity !== undefined && constraint.integerCreativity) {
+    const [minimum, maximum] = constraint.integerCreativity;
+    const creativity = Number(input.creativity);
+    if (!Number.isInteger(creativity) || creativity < minimum || creativity > maximum) {
+      throw new ApiError('invalid_request', `${model} creativity must be an integer ${minimum}-${maximum} (received: ${input.creativity})`);
+    }
+  }
   if (input.negativePrompt !== undefined && !constraint.supportsNegativePrompt) {
     throw new ApiError('invalid_request', `${model} does not support negative_prompt`);
   }
@@ -401,6 +472,12 @@ export function validateImageGeneration(
     return;
   }
   const suppliedSize = input.size ?? constraint.defaultSize;
+  if (constraint.allowedSizes) {
+    if (!constraint.allowedSizes.includes(suppliedSize.toLowerCase())) {
+      throw new ApiError('invalid_request', `${model} size must be one of ${constraint.allowedSizes.join(', ')} (received: ${suppliedSize})`);
+    }
+    return;
+  }
   if (constraint.sizeTiers?.includes(suppliedSize.toLowerCase())) return;
   if (constraint.sizeTiers && !/^\d+x\d+$/i.test(suppliedSize)) {
     throw new ApiError('invalid_request', `${model} size must be one of ${constraint.sizeTiers.join(', ')} or WIDTHxHEIGHT (received: ${suppliedSize})`);

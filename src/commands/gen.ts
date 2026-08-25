@@ -16,7 +16,7 @@ import { Command } from 'commander';
 import { ApiError } from '../lib/errors.js';
 import { resolveAuth } from '../lib/config.js';
 import { request } from '../lib/http.js';
-import { validateGeminiImageGeneration, validateImageGeneration, validateVideoGeneration } from '../lib/model-capabilities.js';
+import { validateGeminiImageGeneration, getImageConstraint, validateImageGeneration, validateVideoGeneration } from '../lib/model-capabilities.js';
 import { resolveCreativeModel } from '../lib/model-selection.js';
 import { downloadTaskContent, extractTaskId, pollTask } from '../lib/tasks.js';
 import { info, printJson } from '../lib/output.js';
@@ -354,14 +354,18 @@ export function registerGen(program: Command): void {
         throw new ApiError('invalid_request', '--response-format b64_json cannot be used with --no-wait; use url');
       }
       const body: Record<string, unknown> = { model, prompt: promptParts.join(' '), n };
+      const constraint = getImageConstraint(model);
       if (opts.size) body.size = opts.size;
       if (opts.aspectRatio) body.aspect_ratio = opts.aspectRatio;
-      if (opts.resolution) body.resolution = opts.resolution.toLowerCase();
+      if (opts.resolution) body[constraint?.resolutionParam ?? 'resolution'] = opts.resolution.toLowerCase();
       if (opts.seed !== undefined) body.seed = opts.seed;
       if (opts.quality) body.quality = opts.quality;
       if (opts.background) body.background = opts.background;
       if (opts.negativePrompt) body.negative_prompt = opts.negativePrompt;
-      if (opts.creativity) body.creativity = opts.creativity.toLowerCase();
+      if (opts.creativity) {
+        // Topaz families take an integer 1-9; Krea takes a string mode.
+        body.creativity = constraint?.integerCreativity ? Number(opts.creativity) : opts.creativity.toLowerCase();
+      }
       if (opts.promptExtend !== undefined) body.prompt_extend = opts.promptExtend;
       if (styleReferences) body.image_style_references = styleReferences;
       if (moodboards) body.moodboards = moodboards;

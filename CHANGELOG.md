@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.5.0 - 2026-08-25
+
+- Fixed `krea-2-medium/-turbo/large` reference-image validation: the local table said 0 while the platform contract accepts up to 10 reference images (each maps to a Krea style reference), so every `gen image --image` edit was rejected locally without reaching the server (2026-08-25 live audit P01).
+- Added local constraints for the August image wave so invalid parameters are intercepted before submission: `topaz-image-reimagine`/`-bloom-2`/`-wonder-3-5`, `wavespeed-seedvr2-upscale`/`-ultimate-upscale`, `quiver-text-to-svg`/`-image-to-svg`, `hitpaw-image-enhance`/`-portrait-enhance`, `beeble-switchx-image-720p`/`-1080p`, `recraft-v4`/`-v4-pro`.
+- Enforce the exact-one-input-image requirement locally for the enhance/upscale/vectorize/switch families instead of surfacing the server 400.
+- Map `--resolution` to the `target_resolution` wire field for WaveSpeed upscales (the generic `resolution` field is silently ignored by that family).
+- Send Topaz `--creativity` as an integer 1-9 (the platform contract takes a number; the Krea string modes are unchanged).
+- Validate Recraft sizes against the official V4 tables (non-pro caps at ~1.5K, pro at ~3K) and reject reference images locally (the channel is text-to-image only).
+- Intercept `gen image` on Gemini image models with a direct pointer to `gen gemini-image` (native generateContent endpoint) instead of an opaque upstream failure (audit P07).
+
 ## 0.4.1 - 2026-08-18
 
 - Added `@file` syntax for local reference media on all gen paths (`--image @C:/path/ref.jpg`): the file is read and inlined as a data URI with per-file 8MB and per-command 12MB guards — local files no longer require manual hosting.

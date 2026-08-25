@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { maskKey, sanitize } from '../src/lib/output.js';
 import { normalizeHomePath } from '../src/lib/config.js';
 import { extractProgress, extractTaskId, normalizeTaskStatus } from '../src/lib/tasks.js';
+import { validateImageGeneration } from '../src/lib/model-capabilities.js';
 
 describe('normalizeHomePath（Windows MSYS 路径防御）', () => {
   it('MSYS 风格转 Windows 原生；普通路径原样返回', () => {
@@ -77,5 +78,48 @@ describe('任务 ID / 进度提取（宽容解析多渠道上游）', () => {
     expect(extractProgress({ progress: 80 })).toBe(80);
     expect(extractProgress({ progress: '60%' })).toBe(60);
     expect(extractProgress({})).toBeUndefined();
+  });
+});
+
+describe('validateImageGeneration 新图像族本地契约', () => {
+  const base = { n: 1 };
+
+  it('krea-2 接受最多 10 张参考图（平台 OpenAI facade 映射 style reference，2026-08-25 审计回归）', () => {
+    expect(() => validateImageGeneration('krea-2-medium', { ...base, imageCount: 10 })).not.toThrow();
+    expect(() => validateImageGeneration('krea-2-large', { ...base, imageCount: 11 })).toThrow(/at most 10 reference images/);
+  });
+
+  it('Gemini 图像模型在 gen image 上本地拦截并指向 gen gemini-image（P07）', () => {
+    expect(() => validateImageGeneration('gemini-3-pro-image', base)).toThrow(/gen gemini-image/);
+    expect(() => validateImageGeneration('gemini-2.5-flash-image', base)).toThrow(/gen gemini-image/);
+  });
+
+  it('增强/超分/矢量化族要求恰好一张输入图', () => {
+    for (const model of ['topaz-image-reimagine', 'topaz-image-bloom-2', 'topaz-image-wonder-3-5',
+      'wavespeed-seedvr2-upscale', 'wavespeed-ultimate-upscale', 'quiver-image-to-svg',
+      'hitpaw-image-enhance', 'hitpaw-image-portrait-enhance', 'beeble-switchx-image-720p']) {
+      expect(() => validateImageGeneration(model, { ...base, imageCount: 0 })).toThrow(/requires at least 1 input image/);
+      expect(() => validateImageGeneration(model, { ...base, imageCount: 1 })).not.toThrow();
+    }
+  });
+
+  it('topaz creativity 是 1-9 整数；wavespeed 分辨率 2k/4k/8k；quiver t2svg 最多 4 参考图；beeble 最多 2 图', () => {
+    expect(() => validateImageGeneration('topaz-image-reimagine', { ...base, imageCount: 1, creativity: '5' })).not.toThrow();
+    expect(() => validateImageGeneration('topaz-image-reimagine', { ...base, imageCount: 1, creativity: 'high' })).toThrow(/integer 1-9/);
+    expect(() => validateImageGeneration('topaz-image-reimagine', { ...base, imageCount: 1, creativity: '10' })).toThrow(/integer 1-9/);
+    expect(() => validateImageGeneration('wavespeed-ultimate-upscale', { ...base, imageCount: 1, resolution: '8k' })).not.toThrow();
+    expect(() => validateImageGeneration('wavespeed-ultimate-upscale', { ...base, imageCount: 1, resolution: '16k' })).toThrow(/resolution/);
+    expect(() => validateImageGeneration('quiver-text-to-svg', { ...base, imageCount: 4 })).not.toThrow();
+    expect(() => validateImageGeneration('quiver-text-to-svg', { ...base, imageCount: 5 })).toThrow(/at most 4 reference images/);
+    expect(() => validateImageGeneration('beeble-switchx-image-1080p', { ...base, imageCount: 2 })).not.toThrow();
+    expect(() => validateImageGeneration('beeble-switchx-image-1080p', { ...base, imageCount: 3 })).toThrow(/at most 2 reference images/);
+  });
+
+  it('recraft 尺寸走官方表；n 1-6；不接受参考图', () => {
+    expect(() => validateImageGeneration('recraft-v4', { n: 6, size: '1536x768' })).not.toThrow();
+    expect(() => validateImageGeneration('recraft-v4', { n: 7, size: '1024x1024' })).toThrow(/n must be 1-6/);
+    expect(() => validateImageGeneration('recraft-v4', { n: 1, size: '2048x2048' })).toThrow(/size must be one of/);
+    expect(() => validateImageGeneration('recraft-v4-pro', { n: 1, size: '2048x2048' })).not.toThrow();
+    expect(() => validateImageGeneration('recraft-v4', { n: 1, size: '1024x1024', imageCount: 1 })).toThrow(/reference images/);
   });
 });

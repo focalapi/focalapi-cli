@@ -391,6 +391,36 @@ describe('gen image', () => {
     expect(capturedBody).toMatchObject({ aspect_ratio: '16:9', resolution: '2k', seed: 7 });
   });
 
+  it('maps new-family wire fields: wavespeed target_resolution, topaz integer creativity, krea reference images', async () => {
+    const png = Buffer.from('fake-png-bytes').toString('base64');
+    const bodies: Record<string, Record<string, unknown>> = {};
+    vi.stubGlobal(
+      'fetch',
+      mockFetchRouter({
+        '/v1/images/generations': (init) => {
+          const body = JSON.parse(String(init?.body)) as Record<string, unknown>;
+          bodies[String(body.model)] = body;
+          return { created: 1, data: [{ b64_json: png }] };
+        },
+      }),
+    );
+    const outDir = join(ctx.homeDir, 'new-family-wire-out');
+    const ref = 'data:image/png;base64,ZmFrZQ==';
+    expect(await main(argv('gen', 'image', 'x', '-m', 'wavespeed-seedvr2-upscale', '--resolution', '8k', '--image', ref, '-o', outDir, '--json'))).toBe(0);
+    expect(bodies['wavespeed-seedvr2-upscale']).toMatchObject({ target_resolution: '8k' });
+    expect(bodies['wavespeed-seedvr2-upscale']).not.toHaveProperty('resolution');
+    expect(await main(argv('gen', 'image', 'repaint', '-m', 'topaz-image-reimagine', '--creativity', '5', '--image', ref, '-o', outDir, '--json'))).toBe(0);
+    expect(bodies['topaz-image-reimagine']).toMatchObject({ creativity: 5 });
+    expect(await main(argv('gen', 'image', 'edit', '-m', 'krea-2-medium', '--image', ref, '-o', outDir, '--json'))).toBe(0);
+    expect(bodies['krea-2-medium']).toMatchObject({ image: [expect.any(String)] });
+
+    const spy = mockFetchRouter({});
+    vi.stubGlobal('fetch', spy);
+    expect(await main(argv('gen', 'image', 'x', '-m', 'gemini-3-pro-image', '--json'))).toBe(1);
+    expect(await main(argv('gen', 'image', 'x', '-m', 'topaz-image-wonder-3-5', '--json'))).toBe(1);
+    expect(spy).not.toHaveBeenCalled();
+  });
+
   it('sends current Krea fields and rejects unsupported output counts before requesting', async () => {
     const png = Buffer.from('fake-png-bytes').toString('base64');
     let capturedBody: Record<string, unknown> | undefined;
