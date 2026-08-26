@@ -5,6 +5,7 @@
 import { writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { Command } from 'commander';
+import { pollTask, extractTaskArtifactURL } from '../lib/tasks.js';
 import { ApiError } from '../lib/errors.js';
 import { resolveAuth } from '../lib/config.js';
 import { rawRequest, request } from '../lib/http.js';
@@ -57,14 +58,36 @@ export function registerAudio(program: Command): void {
     .action(async (textParts: string[], opts: { model: string; voice: string; format: string; out?: string }, cmd: Command) => {
       const g = cmd.optsWithGlobals() as GlobalOpts;
       const auth = resolveAuth(g);
-      const res = await rawRequest({
+      // The gateway exposes TTS through the task-based /v1/audio/generations
+      // endpoint, not the OpenAI /v1/audio/speech path (audio matrix
+      // 2026-08-26: all six TTS models 404 on the speech path).
+      const created = await request<{ task_id?: string; id?: string }>({
         baseUrl: auth.baseUrl,
-        path: '/v1/audio/speech',
+        path: '/v1/audio/generations',
         apiKey: auth.apiKey,
-        body: { model: opts.model, input: textParts.join(' '), voice: opts.voice, response_format: opts.format },
+        body: { model: opts.model, prompt: textParts.join(' '), voice: opts.voice },
+        timeoutMs: 120_000,
+      });
+      const taskId = created.task_id ?? created.id;
+      if (!taskId) {
+        throw new ApiError('bad_response', '音频任务提交响应中未找到 task_id', { body: created });
+      }
+      const final = await pollTask(auth.baseUrl, auth.apiKey, taskId, {
+        intervalMs: 3_000,
         timeoutMs: 300_000,
       });
-      const buf = Buffer.from(await res.arrayBuffer());
+      if (final.status !== 'success') {
+        throw new ApiError('task_failed', `音频任务 ${taskId} 失败（${final.rawStatus ?? final.status}）`);
+      }
+      const url = extractTaskArtifactURL(final.raw);
+      if (!url) {
+        throw new ApiError('bad_response', '音频任务产物 URL 未找到');
+      }
+      const artifactRes = await fetch(url, { signal: AbortSignal.timeout(120_000) });
+      if (!artifactRes.ok) {
+        throw new ApiError('bad_response', `音频产物下载失败（HTTP ${artifactRes.status}）`);
+      }
+      const buf = Buffer.from(await artifactRes.arrayBuffer());
       if (buf.length === 0) {
         throw new ApiError('bad_response', '语音合成返回空内容');
       }

@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.7.1 - 2026-08-26
+
+- Fixed TTS routing: audio speech now goes through the task-based
+  /v1/audio/generations endpoint with polling and artifact download,
+  instead of the unsupported OpenAI /v1/audio/speech path. All six TTS
+  models (ElevenLabs x2, Fish Audio x2, Seed Audio x2) were unreachable
+  through the old route.
+
 ## 0.7.0 - 2026-08-26
 
 Batch-20260826: twelve new partner models across image and video lines.
