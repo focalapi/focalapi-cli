@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.7.2 - 2026-08-26
+
+- Fixed audio artifact extraction: task responses store the audio URL
+  in result_url (not url), which the extractor now checks. All TTS
+  models were generating audio successfully but the CLI could not
+  download the artifact.
+
 ## 0.7.1 - 2026-08-26
 
 - Fixed TTS routing: audio speech now goes through the task-based

@@ -268,7 +268,7 @@ export function extractTaskArtifactURL(raw: unknown): string | undefined {
   if (!raw || typeof raw !== 'object') return undefined;
   const obj = raw as Record<string, unknown>;
   const data = obj.data as Record<string, unknown> | undefined;
-  const candidates = [obj.url, data?.url, (data?.data as Record<string, unknown> | undefined)?.url, (data?.data as Record<string, unknown> | undefined)?.video_url];
+  const candidates = [obj.url, obj.result_url, data?.url, (data?.data as Record<string, unknown> | undefined)?.url, (data?.data as Record<string, unknown> | undefined)?.video_url];
   for (const candidate of candidates) {
     if (typeof candidate === 'string' && /^https?:\/\//.test(candidate)) return candidate;
   }
