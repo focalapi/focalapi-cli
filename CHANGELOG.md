@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.7.0 - 2026-08-26
+
+Batch-20260826: twelve new partner models across image and video lines.
+
+New image models (local constraint tables with enum validation):
+- ideogram-p-image: quality x resolution x 15 aspect ratios, $0.003-0.015/image
+- kling-v3-omni-image + kling-image-o1: up to 10 reference images for editing,
+  series generation (omni only), $0.028-0.056/image
+- seedream-5-0-pro-layer-separation: image decomposition into background +
+  transparent layers, $0.032-0.064/layer
+- flux-vto: virtual try-on with person + garment pair, $0.0375-0.075/run
+- magnific-style-transfer: source + style reference, $0.11/run
+- magnific-skin-enhancer: single image, mode-based pricing $0.29-0.45/run
+
+New video models:
+- flux-video-upscale: 1.5-3x super-resolution on 1-20s sources
+- wan-3.0-t2v/i2v/r2v: native audio up to 30s, $0.0715-0.286/s
+- vcube-video-enhance: upscale/restore up to 8K with frame interpolation
+
+All pricing follows the official vendor API rates per the batch decision.
+
 ## 0.6.2 - 2026-08-26
 
 - Image downloads now retry across three windows (600s/600s/900s) instead of a single 300s abort. The stability probe proved the 300s window was failing deliveries over slow proxied links while the platform had already generated and billed the image (server-side completion 43-47s; the abort text was Node's own AbortSignal message, not an upstream error).

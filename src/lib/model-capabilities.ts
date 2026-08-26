@@ -249,6 +249,34 @@ const IMAGE_CONSTRAINTS: Record<string, ImageGenerationConstraint> = {
     allowedSizes: ['2048x2048', '2560x1664', '1664x2560', '2432x1792', '1792x2432', '2304x1792', '1792x2304',
       '3072x1536', '1536x3072', '2688x1536', '1536x2688', '1664x2688', '2560x1792', '1792x2560'],
   },
+  'ideogram-p-image': {
+    maxN: 1, qualities: ['very_low', 'low', 'medium', 'high'], resolutions: ['1k', '2k'],
+    aspectRatios: ['1:1', '2:3', '3:2', '3:4', '4:3', '4:5', '5:4', '9:16', '16:9', '10:16', '16:10', '1:2', '2:1', '1:3', '3:1'],
+    supportsSeed: true, maxSeed: 2147483647,
+  },
+  'kling-v3-omni-image': {
+    maxN: 9, maxReferenceImages: 10, resolutions: ['1k', '2k', '4k'],
+    aspectRatios: ['16:9', '9:16', '1:1', '4:3', '3:4', '3:2', '2:3', '21:9'],
+    supportsSeed: true, maxSeed: 2147483647,
+  },
+  'kling-image-o1': {
+    maxN: 1, maxReferenceImages: 10, resolutions: ['1k', '2k'],
+    aspectRatios: ['16:9', '9:16', '1:1', '4:3', '3:4', '3:2', '2:3', '21:9'],
+    supportsSeed: true, maxSeed: 2147483647,
+  },
+  'seedream-5-0-pro-layer-separation': {
+    maxN: 1, minImageCount: 1,
+    resolutions: ['auto', '1k', '1.5k', '2k'],
+  },
+  'flux-vto': {
+    maxN: 1, minImageCount: 2,
+  },
+  'magnific-style-transfer': {
+    maxN: 1, minImageCount: 2,
+  },
+  'magnific-skin-enhancer': {
+    maxN: 1, minImageCount: 1,
+  },
 };
 
 export function getImageConstraint(model: string): ImageGenerationConstraint | undefined {
@@ -344,6 +372,19 @@ const VIDEO_CONSTRAINTS: Record<string, VideoGenerationConstraint> = {
   'flux-3': {
     resolutions: ['hd', 'fhd'], ratios: FLUX_VIDEO_RATIOS, minSeconds: 5, maxSeconds: 20,
     safetyTolerance: { minimum: 0, maximum: 4 }, safetyToleranceMaxWithImages: 2, maxReferenceImages: 10,
+  },  'flux-video-upscale': {
+    minSeconds: 1, maxSeconds: 20,
+  },
+  'wan-3.0-t2v': {
+    resolutions: ['480p', '720p', '1080p'], minSeconds: 1, maxSeconds: 30,
+  },
+  'wan-3.0-i2v': {
+    resolutions: ['480p', '720p', '1080p'], minSeconds: 1, maxSeconds: 30, maxFirstFrameImages: 1,
+  },
+  'wan-3.0-r2v': {
+    resolutions: ['480p', '720p', '1080p'], minSeconds: 1, maxSeconds: 30, maxReferenceImages: 10,
+  },
+  'vcube-video-enhance': {
   },
 };
 
