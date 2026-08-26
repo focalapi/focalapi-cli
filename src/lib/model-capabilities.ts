@@ -311,6 +311,15 @@ const VIDEO_CONSTRAINTS: Record<string, VideoGenerationConstraint> = {
     minSeconds: 6, maxSeconds: 10, allowedSeconds: [6, 8, 10],
     allowedFps: [24, 25, 50], maxReferenceImages: 2, supportsGenerateAudio: true,
   },
+  'veo-3.1-generate-preview': {
+    resolutions: ['720p', '1080p'], minSeconds: 4, maxSeconds: 8, allowedSeconds: [4, 6, 8],
+  },
+  'veo-3.1-fast-generate-preview': {
+    resolutions: ['720p', '1080p'], minSeconds: 4, maxSeconds: 8, allowedSeconds: [4, 6, 8],
+  },
+  'veo-3.1-lite-generate-preview': {
+    resolutions: ['720p', '1080p'], minSeconds: 4, maxSeconds: 8, allowedSeconds: [4, 6, 8],
+  },
   'flux-3': {
     resolutions: ['hd', 'fhd'], ratios: FLUX_VIDEO_RATIOS, minSeconds: 5, maxSeconds: 20,
     safetyTolerance: { minimum: 0, maximum: 4 }, safetyToleranceMaxWithImages: 2, maxReferenceImages: 10,

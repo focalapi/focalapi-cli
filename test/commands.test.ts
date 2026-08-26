@@ -392,6 +392,37 @@ describe('gen image', () => {
     expect(capturedBody).toMatchObject({ aspect_ratio: '16:9', resolution: '2k', seed: 7 });
   });
 
+  it('gen video carries task-type and vendor params; omni-video redirects; veo seconds validated locally', async () => {
+    const mp4 = 'fake';
+    let capturedBody: Record<string, unknown> | undefined;
+    vi.stubGlobal('fetch', mockFetchRouter({
+      '/v1/video/generations': (init) => {
+        capturedBody = JSON.parse(String(init?.body)) as Record<string, unknown>;
+        return { task_id: 'task_vidparams', status: 'queued' };
+      },
+    }));
+    const outDir = join(ctx.homeDir, 'vid-params-out');
+    expect(await main(argv(
+      'gen', 'video', 'x', '-m', 'dreamina-seedance-2-5-260628', '--omni-reference-task-type', 'edit',
+      '--no-wait', '-o', outDir, '--json',
+    ))).toBe(0);
+    expect(capturedBody).toMatchObject({ omni_reference_task_type: 'edit' });
+
+    expect(await main(argv(
+      'gen', 'video', 'x', '-m', 'bria-video-edit', '--operation', 'replace_background',
+      '--no-wait', '-o', outDir, '--json',
+    ))).toBe(0);
+    expect(capturedBody).toMatchObject({ operation: 'replace_background' });
+
+    const spy = mockFetchRouter({});
+    vi.stubGlobal('fetch', spy);
+    expect(await main(argv('gen', 'video', 'x', '-m', 'dreamina-seedance-2-5-260628', '--omni-reference-task-type', 'wrong', '--no-wait', '--json'))).toBe(1);
+    expect(await main(argv('gen', 'video', 'x', '-m', 'veo-3.1-generate-preview', '--seconds', '5', '--no-wait', '--json'))).toBe(1);
+    expect(await main(argv('gen', 'omni-video', 'x', '--json'))).toBe(1);
+    expect(spy).not.toHaveBeenCalled();
+    expect(mp4 === 'fake').toBe(true);
+  });
+
   it('maps new-family wire fields: wavespeed target_resolution, topaz integer creativity, krea reference images', async () => {
     const png = Buffer.from('fake-png-bytes').toString('base64');
     const bodies: Record<string, Record<string, unknown>> = {};
@@ -673,42 +704,14 @@ describe('task cancel + capacity signal', () => {
 });
 
 describe('gen omni-video', () => {
-  it('uses the native Interactions API, retains the official model ID, and saves inline video', async () => {
-    const video = Buffer.from('gemini-omni-video').toString('base64');
-    let capturedBody: Record<string, unknown> | undefined;
-    vi.stubGlobal(
-      'fetch',
-      mockFetchRouter({
-        '/v1beta/interactions': (init) => {
-          capturedBody = JSON.parse(String(init?.body)) as Record<string, unknown>;
-          return {
-            id: 'interaction-123',
-            steps: [{ content: [{ type: 'video', mime_type: 'video/mp4', data: video }] }],
-          };
-        },
-      }),
-    );
-
-    const outDir = join(ctx.homeDir, 'gemini-omni-out');
-    expect(await main(argv(
-      'gen', 'omni-video', 'a dancing robot', '--image', 'data:image/png;base64,ZmFrZQ==',
-      '--aspect-ratio', '9:16', '--task', 'image_to_video', '-o', outDir, '--json',
-    ))).toBe(0);
-    expect(capturedBody).toMatchObject({
-      model: 'gemini-omni-flash-preview',
-      input: [{ type: 'image', mime_type: 'image/png', data: 'ZmFrZQ==' }, { type: 'text', text: 'a dancing robot' }],
-      response_format: { type: 'video', aspect_ratio: '9:16' },
-      generation_config: { video_config: { task: 'image_to_video' } },
-    });
-    const out = parseStdoutJson() as { interaction_id: string; file: string };
-    expect(out.interaction_id).toBe('interaction-123');
-    expect(readFileSync(out.file).toString()).toBe('gemini-omni-video');
-  });
-
-  it('rejects non-data-URI image input before making an API request', async () => {
+  it('omni-video is retired: every call redirects to gen video locally', async () => {
+    // vid-matrix 2026-08-26: the gateway rejects the interactions endpoint
+    // for gemini-omni-flash-preview in every shape; the CLI must not
+    // round-trip a guaranteed 400.
     const spy = mockFetchRouter({});
     vi.stubGlobal('fetch', spy);
-    expect(await main(argv('gen', 'omni-video', 'x', '--image', 'https://example.com/image.png', '--json'))).toBe(1);
+    expect(await main(argv('gen', 'omni-video', 'a fox', '--image', 'data:image/png;base64,ZmFrZQ==', '-o', join(ctx.homeDir, 'omni-retired'), '--json'))).toBe(1);
+    expect(parseStdoutJson().error.message).toContain('gen video');
     expect(spy).not.toHaveBeenCalled();
   });
 });

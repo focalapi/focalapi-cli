@@ -516,60 +516,14 @@ export function registerGen(program: Command): void {
     });
 
   gen.command('omni-video')
-    .description('使用 Gemini Omni Flash 原生 Interactions API 生成或编辑视频')
-    .argument('<prompt...>', '提示词')
-    .option('--image <data-uri...>', '图生视频参考图；仅支持 base64 data URI，可多个')
-    .option('--previous-interaction-id <id>', '上一次交互 ID，用于连续视频编辑')
-    .option('--aspect-ratio <ratio>', '画面比例：16:9 或 9:16')
-    .option('--task <task>', '视频任务：text_to_video、image_to_video、reference_to_video 或 edit')
-    .option('-o, --out <dir>', '输出目录', DEFAULT_OUT_DIR)
-    .action(async (
-      promptParts: string[],
-      opts: { image?: string[]; previousInteractionId?: string; aspectRatio?: string; task?: string; out: string },
-      cmd: Command,
-    ) => {
-      const g = cmd.optsWithGlobals() as GlobalOpts;
-      const auth = resolveAuth(g);
-      if (opts.aspectRatio && !['16:9', '9:16'].includes(opts.aspectRatio)) {
-        throw new ApiError('invalid_request', '--aspect-ratio must be 16:9 or 9:16');
-      }
-      if (opts.task && !['text_to_video', 'image_to_video', 'reference_to_video', 'edit'].includes(opts.task)) {
-        throw new ApiError('invalid_request', '--task must be text_to_video, image_to_video, reference_to_video, or edit');
-      }
-      const prompt = promptParts.join(' ');
-      const imageInputs = (opts.image ?? []).map(geminiOmniImageInput);
-      const input: string | Array<Record<string, unknown>> = imageInputs.length === 0
-        ? prompt
-        : [...imageInputs, { type: 'text', text: prompt }];
-      const res = await withProgress('正在生成 Gemini Omni 视频', () => request<GeminiOmniInteractionResponse>({
-        baseUrl: auth.baseUrl,
-        path: '/v1beta/interactions',
-        apiKey: auth.apiKey,
-        body: {
-          model: 'gemini-omni-flash-preview',
-          input,
-          ...(opts.previousInteractionId ? { previous_interaction_id: opts.previousInteractionId } : {}),
-          ...(opts.aspectRatio ? { response_format: { type: 'video', aspect_ratio: opts.aspectRatio } } : {}),
-          ...(opts.task ? { generation_config: { video_config: { task: opts.task } } } : {}),
-        },
-        timeoutMs: 600_000,
-      }));
-      const video = extractGeminiOmniVideo(res);
-      if (!video) {
-        throw new ApiError('bad_response', 'Gemini Omni 响应中未找到视频数据', { body: res });
-      }
-      const dir = resolve(opts.out);
-      await mkdir(dir, { recursive: true });
-      const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
-      const extension = video.mimeType?.includes('webm') ? '.webm' : '.mp4';
-      const file = join(dir, `gemini-omni-${timestamp}${extension}`);
-      await writeFile(file, Buffer.from(video.data, 'base64'));
-      if (g.json) {
-        printJson({ interaction_id: res.id, file });
-      } else {
-        info(`✓ ${file}`);
-        if (res.id) info(`交互 ID：${res.id}`);
-      }
+    .description('已下线：Gemini Omni Flash 全部能力改走 gen video 门面')
+    .allowUnknownOption()
+    .action(async () => {
+      // vid-matrix 2026-08-26: the gateway rejects the interactions endpoint
+      // for gemini-omni-flash-preview in every shape ("available only through
+      // the Comfy Cloud video generation endpoint"). Redirect locally instead
+      // of round-tripping a guaranteed 400.
+      throw new ApiError('invalid_request', 'gen omni-video 已下线：gemini-omni-flash-preview 的文生视频/首帧/参考/编辑能力全部改走 `focalapi gen video -m gemini-omni-flash-preview`（支持 --first-frame/--image/--content）');
     });
 
   gen.command('video')
@@ -595,6 +549,12 @@ export function registerGen(program: Command): void {
     .option('--return-last-frame <boolean>', '是否返回最后一帧（只接受 true 或 false）', (v) => parseBooleanOption(v, 'return-last-frame'))
     .option('--execution-expires-after <seconds>', '任务过期秒数（3600–259200）', (v) => Number.parseInt(v, 10))
     .option('--safety-identifier <identifier>', 'Seedance 安全标识符（1–64 个可打印 ASCII 字符）')
+    .option('--omni-reference-task-type <type>', 'Seedance 2.5 多模态任务类型：auto、reference、edit 或 extend（编辑/延长参考视频时必填，auto 会与默认时长冲突）')
+    .option('--voice <label>', 'HeyGen 语音标签（talking-photo 剧本必填；合法值见 models get heygen-talking-photo 的 voice 枚举）')
+    .option('--avatar <label>', 'HeyGen Avatar 形象标签（heygen-avatar 必填；合法值见 models get heygen-avatar 的 avatar 枚举）')
+    .option('--operation <op>', 'Bria 视频操作：remove_background、green_screen 或 replace_background')
+    .option('--enhance-model <id>', 'HitPaw 视频增强模型（如 general_restore_2x；完整枚举见 models get hitpaw-video-enhance）')
+    .option('--upscaler-model <family>', 'Topaz 视频放大模型：starlight_fast、starlight_creative、starlight_precise_25 或 astra_2')
     .option('--no-wait', '提交后立即返回 task_id，不等待完成')
     .option('--idempotency-key <key>', '幂等键（8–128 个可打印 ASCII 字符）。同一 key 的重复提交拿回原任务而不重复计费；省略时自动生成。重试不确定的提交时务必复用原 key')
     .option('--poll-interval <ms>', '轮询间隔毫秒', (v) => Number.parseInt(v, 10), 5_000)
@@ -608,6 +568,7 @@ export function registerGen(program: Command): void {
           model?: string; seconds?: number; duration?: number; size?: string; resolution?: string; ratio?: string; aspectRatio?: string; seed?: number; fps?: number; safetyTolerance?: number; image?: string[]; firstFrame?: string; content?: string; idempotencyKey?: string;
           generateAudio?: boolean; watermark?: boolean; serviceTier?: string; priority?: number; callbackUrl?: string;
           returnLastFrame?: boolean; executionExpiresAfter?: number; safetyIdentifier?: string;
+          omniReferenceTaskType?: string; voice?: string; avatar?: string; operation?: string; enhanceModel?: string; upscalerModel?: string;
           wait?: boolean; pollInterval: number; timeout: number; out: string;
         },
         cmd: Command,
@@ -646,6 +607,28 @@ export function registerGen(program: Command): void {
         if (opts.returnLastFrame !== undefined) metadata.return_last_frame = opts.returnLastFrame;
         if (opts.executionExpiresAfter !== undefined) metadata.execution_expires_after = opts.executionExpiresAfter;
         if (opts.safetyIdentifier) metadata.safety_identifier = opts.safetyIdentifier;
+        if (opts.omniReferenceTaskType) {
+          const taskType = opts.omniReferenceTaskType.toLowerCase();
+          if (!['auto', 'reference', 'edit', 'extend'].includes(taskType)) {
+            throw new ApiError('invalid_request', '--omni-reference-task-type must be auto, reference, edit, or extend');
+          }
+          body.omni_reference_task_type = taskType;
+        }
+        if (opts.voice) body.voice = opts.voice;
+        if (opts.avatar) body.avatar = opts.avatar;
+        if (opts.operation) {
+          if (!['remove_background', 'green_screen', 'replace_background'].includes(opts.operation)) {
+            throw new ApiError('invalid_request', '--operation must be remove_background, green_screen, or replace_background');
+          }
+          body.operation = opts.operation;
+        }
+        if (opts.enhanceModel) body.enhance_model = opts.enhanceModel;
+        if (opts.upscalerModel) {
+          if (!['starlight_fast', 'starlight_creative', 'starlight_precise_25', 'astra_2'].includes(opts.upscalerModel)) {
+            throw new ApiError('invalid_request', '--upscaler-model must be starlight_fast, starlight_creative, starlight_precise_25, or astra_2');
+          }
+          body.upscaler_model = opts.upscalerModel;
+        }
         if (opts.content) metadata.content = parseJsonArray(await readContentArgument(opts.content), 'content');
         validateVideoGeneration(model, {
           promptRunes: [...promptParts.join(' ')].length,
