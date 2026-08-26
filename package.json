@@ -1,6 +1,6 @@
 {
   "name": "focalapi-cli",
-  "version": "0.5.1",
+  "version": "0.6.0",
   "description": "让任意 AI Agent 直接调用 focalapi 创作模型的命令行工具",
   "type": "module",
   "bin": {

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { maskKey, sanitize } from '../src/lib/output.js';
 import { normalizeHomePath } from '../src/lib/config.js';
 import { extractProgress, extractTaskId, normalizeTaskStatus } from '../src/lib/tasks.js';
-import { validateImageGeneration } from '../src/lib/model-capabilities.js';
+import { validateImageGeneration, validateVideoGeneration } from '../src/lib/model-capabilities.js';
 
 describe('normalizeHomePath（Windows MSYS 路径防御）', () => {
   it('MSYS 风格转 Windows 原生；普通路径原样返回', () => {
@@ -121,5 +121,22 @@ describe('validateImageGeneration 新图像族本地契约', () => {
     expect(() => validateImageGeneration('recraft-v4', { n: 1, size: '2048x2048' })).toThrow(/size must be one of/);
     expect(() => validateImageGeneration('recraft-v4-pro', { n: 1, size: '2048x2048' })).not.toThrow();
     expect(() => validateImageGeneration('recraft-v4', { n: 1, size: '1024x1024', imageCount: 1 })).toThrow(/reference images/);
+  });
+});
+
+describe('validateVideoGeneration 新视频族本地契约(vid-matrix 2026-08-26)', () => {
+  it('源长族拒绝显式时长;其余族校验时长档', () => {
+    expect(() => validateVideoGeneration('heygen-talking-photo', { seconds: 5 })).toThrow(/does not accept a duration/);
+    expect(() => validateVideoGeneration('topaz-video-enhance', { seconds: 10 })).toThrow(/does not accept a duration/);
+    expect(() => validateVideoGeneration('bria-video-edit', { seconds: 5 })).toThrow(/does not accept a duration/);
+    expect(() => validateVideoGeneration('happyhorse-1.0-video-edit', { seconds: 5 })).toThrow(/does not accept a duration/);
+    expect(() => validateVideoGeneration('wan2.7-t2v', { seconds: 5 })).not.toThrow();
+    expect(() => validateVideoGeneration('wan2.7-videoedit', { seconds: 11 })).toThrow(/seconds must be 2-10/);
+    expect(() => validateVideoGeneration('pixverse-v5', { seconds: 6 })).toThrow(/seconds must be one of 5, 8/);
+    expect(() => validateVideoGeneration('luma-ray-3-2', { seconds: 7 })).toThrow(/seconds must be one of 5, 10/);
+    expect(() => validateVideoGeneration('MiniMax-H3', { seconds: 3 })).toThrow(/seconds must be 5-15/);
+    expect(() => validateVideoGeneration('kling-v3-omni', { resolution: '4k', seconds: 5 })).not.toThrow();
+    expect(() => validateVideoGeneration('happyhorse-1.1-i2v', { seconds: 5 })).not.toThrow();
+    expect(() => validateVideoGeneration('wan2.7-t2v', { resolution: '4k' })).toThrow(/resolution must be one of/);
   });
 });

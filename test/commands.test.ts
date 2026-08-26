@@ -711,7 +711,8 @@ describe('gen omni-video', () => {
     const spy = mockFetchRouter({});
     vi.stubGlobal('fetch', spy);
     expect(await main(argv('gen', 'omni-video', 'a fox', '--image', 'data:image/png;base64,ZmFrZQ==', '-o', join(ctx.homeDir, 'omni-retired'), '--json'))).toBe(1);
-    expect(parseStdoutJson().error.message).toContain('gen video');
+    const parsedError = parseStdoutJson().error as { message?: string };
+    expect(parsedError?.message ?? '').toContain('gen video');
     expect(spy).not.toHaveBeenCalled();
   });
 });

@@ -50,11 +50,12 @@ type ImageGenerationConstraint = {
 };
 
 type VideoGenerationConstraint = {
-  resolutions: string[];
+  resolutions?: string[];
   ratios?: string[];
   aspectRatios?: string[];
-  minSeconds: number;
-  maxSeconds: number;
+  /** Undefined together with noDuration for source-length families. */
+  minSeconds?: number;
+  maxSeconds?: number;
   allowedSeconds?: number[];
   requiredSecondsByResolution?: Record<string, number>;
   supportsPriority?: boolean;
@@ -74,6 +75,8 @@ type VideoGenerationConstraint = {
   supportsGenerateAudio?: boolean;
   /** Explicit false = the model rejects watermark; undefined = pass through. */
   supportsWatermark?: boolean;
+  /** Model never accepts a duration (output follows the source media). */
+  noDuration?: boolean;
   allowedFps?: number[];
   safetyTolerance?: { minimum: number; maximum: number };
   maxPromptRunes?: number;
@@ -311,6 +314,24 @@ const VIDEO_CONSTRAINTS: Record<string, VideoGenerationConstraint> = {
     minSeconds: 6, maxSeconds: 10, allowedSeconds: [6, 8, 10],
     allowedFps: [24, 25, 50], maxReferenceImages: 2, supportsGenerateAudio: true,
   },
+  'wan2.7-t2v': { resolutions: ['720p', '1080p'], minSeconds: 2, maxSeconds: 15 },
+  'wan2.7-i2v': { resolutions: ['720p', '1080p'], minSeconds: 2, maxSeconds: 15 },
+  'wan2.7-r2v': { resolutions: ['720p', '1080p'], minSeconds: 2, maxSeconds: 15 },
+  'wan2.7-videoedit': { resolutions: ['720p', '1080p'], minSeconds: 2, maxSeconds: 10 },
+  'pixverse-v5': { resolutions: ['360p', '540p', '720p', '1080p'], minSeconds: 5, maxSeconds: 8, allowedSeconds: [5, 8] },
+  'kling-v3-omni': { resolutions: ['720p', '1080p', '4k'], minSeconds: 3, maxSeconds: 15 },
+  'luma-ray-3-2': { resolutions: ['540p', '720p', '1080p'], minSeconds: 5, maxSeconds: 10, allowedSeconds: [5, 10] },
+  'MiniMax-H3': { resolutions: ['768p', '2k'], minSeconds: 5, maxSeconds: 15 },
+  'heygen-talking-photo': { resolutions: ['720p', '1080p'], noDuration: true },
+  'heygen-avatar': { resolutions: ['720p', '1080p'], noDuration: true },
+  'happyhorse-1.1-t2v': { resolutions: ['720p', '1080p'], minSeconds: 3, maxSeconds: 15 },
+  'happyhorse-1.1-i2v': { resolutions: ['720p', '1080p'], minSeconds: 3, maxSeconds: 15 },
+  'happyhorse-1.1-r2v': { resolutions: ['720p', '1080p'], minSeconds: 3, maxSeconds: 15 },
+  'happyhorse-1.0-video-edit': { resolutions: ['720p', '1080p'], noDuration: true },
+  'topaz-video-enhance': { resolutions: ['1080p', '2160p'], noDuration: true },
+  'hitpaw-video-enhance': { resolutions: ['original', '720p', '1080p', '2k/qhd', '4k/uhd', '8k'], noDuration: true },
+  'beeble-switchx-video': { resolutions: ['720p', '1080p'], noDuration: true },
+  'bria-video-edit': { noDuration: true },
   'veo-3.1-generate-preview': {
     resolutions: ['720p', '1080p'], minSeconds: 4, maxSeconds: 8, allowedSeconds: [4, 6, 8],
   },
@@ -584,6 +605,9 @@ export function validateVideoGeneration(
 ): void {
   const constraint = VIDEO_CONSTRAINTS[model.trim()];
   if (!constraint) return;
+  if (constraint.noDuration && input.seconds !== undefined) {
+    throw new ApiError('invalid_request', `${model} does not accept a duration; the output length follows the source media`);
+  }
   if (constraint.maxPromptRunes !== undefined && input.promptRunes !== undefined) {
     // 上游 4096 限额作用于「文本 + 参考图标注」合成 prompt（2026-08-18 生产
     // 实证：1484 字 + 6 图也被拒，每图标注 ≈435+ 字符），按保守 500/图估算。
@@ -610,13 +634,14 @@ export function validateVideoGeneration(
   if (input.watermark !== undefined && constraint.supportsWatermark === false) {
     throw new ApiError('invalid_request', `${model} does not support watermark`);
   }
-	if (input.seconds !== undefined && (input.seconds < constraint.minSeconds || input.seconds > constraint.maxSeconds)) {
+	if (input.seconds !== undefined && constraint.minSeconds !== undefined && constraint.maxSeconds !== undefined &&
+		(input.seconds < constraint.minSeconds || input.seconds > constraint.maxSeconds)) {
 		throw new ApiError('invalid_request', `${model} seconds must be ${constraint.minSeconds}-${constraint.maxSeconds} (received: ${input.seconds})`);
 	}
 	if (input.seconds !== undefined && constraint.allowedSeconds && !constraint.allowedSeconds.includes(input.seconds)) {
 		throw new ApiError('invalid_request', `${model} seconds must be one of ${constraint.allowedSeconds.join(', ')} (received: ${input.seconds})`);
 	}
-	if (input.resolution && !constraint.resolutions.includes(input.resolution.toLowerCase())) {
+	if (input.resolution && constraint.resolutions && !constraint.resolutions.includes(input.resolution.toLowerCase())) {
     throw new ApiError('invalid_request', `${model} resolution must be one of ${constraint.resolutions.join(', ')} (received: ${input.resolution})`);
   }
   if (input.resolution && (input.imageCount ?? 0) > 0 && constraint.referenceResolutions &&

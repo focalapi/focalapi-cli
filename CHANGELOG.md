@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.0 - 2026-08-26
+
+- Retired `gen omni-video` with a local redirect to `gen video -m gemini-omni-flash-preview`: the gateway rejects the Interactions endpoint for this model in every shape (video matrix evidence 2026-08-26). All four capabilities (t2v/first-frame/reference/edit) ride the video facade.
+- Added task-parameter flags to `gen video`, mapped to the task DTO's top-level fields with local enum validation: `--omni-reference-task-type` (seedance 2.5 edit/extend semantics were unreachable — auto-inference conflicts with the default duration), `--voice`/`--avatar` (HeyGen, enums now published by the platform), `--operation` (Bria), `--enhance-model` (HitPaw), and `--upscaler-model` (Topaz).
+- Added local constraint tables for the August video wave (wan2.7 ×4, pixverse-v5, kling-v3-omni, luma-ray-3-2, MiniMax-H3, HeyGen ×2, happyhorse ×4, topaz/hitpaw video, beeble, bria, veo 3.1 ×3): duration tiers and resolutions are validated locally, and source-length families (heygen, topaz/hitpaw video, beeble, bria, happyhorse video-edit) reject `--seconds` up front instead of round-tripping a guaranteed 400.
+
 ## 0.5.1 - 2026-08-26
 
 - Added `@file` support to `--style-references` and `--moodboards`: the JSON array can now be read from a file instead of inline argv. Windows `cmd` mangles embedded double quotes in JSON arguments (matrix-run evidence 2026-08-25), and the file source sidesteps shell quoting entirely.
