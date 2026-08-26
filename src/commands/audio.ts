@@ -52,7 +52,8 @@ export function registerAudio(program: Command): void {
     .description('文字转语音，产物保存为音频文件')
     .argument('<text...>', '要合成的文本')
     .requiredOption('-m, --model <model>', 'TTS 模型 ID（必填、无默认值；运行 focalapi models list 查看）')
-    .option('--voice <voice>', '音色', 'alloy')
+    .option('--voice <voice>', '音色（ElevenLabs 用完整标签如 "Sarah (female, american)"；Seed Audio 用 "Tim (Male, English)"）')
+    .option('--voices <voices...>', 'Fish Audio 音色数组（可多个）')
     .option('--format <fmt>', '音频格式（mp3/wav/...）', 'mp3')
     .option('-o, --out <file>', '输出文件路径')
     .action(async (textParts: string[], opts: { model: string; voice: string; format: string; out?: string }, cmd: Command) => {
@@ -65,7 +66,7 @@ export function registerAudio(program: Command): void {
         baseUrl: auth.baseUrl,
         path: '/v1/audio/generations',
         apiKey: auth.apiKey,
-        body: { model: opts.model, prompt: textParts.join(' '), voice: opts.voice },
+        body: { model: opts.model, prompt: textParts.join(' '), ...((opts as { voices?: string[] }).voices ? { voices: (opts as { voices?: string[] }).voices } : { voice: opts.voice }) },
         timeoutMs: 120_000,
       });
       const taskId = created.task_id ?? created.id;

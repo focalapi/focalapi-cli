@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.7.4 - 2026-08-26
+
+- Added --voices flag to audio speech for Fish Audio models that take a voices array instead of a singular voice parameter.
+- Voice flag help text now shows the correct label format per model family.
+
 ## 0.7.2 - 2026-08-26
 
 - Fixed audio artifact extraction: task responses store the audio URL
