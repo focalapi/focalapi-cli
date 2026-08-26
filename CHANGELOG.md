@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.6.1 - 2026-08-26
+
+- Resilient task polling: `task status --wait`, `gen video` waits, and every internal poll now tolerate up to 5 consecutive network failures with backoff. A dropped status query no longer kills a running task's wait - polling again is free and can never double-charge - and a give-up error carries the exact `task status <id> --wait --download` recovery command.
+- `gen image` sync waits enrich network errors with recovery guidance: a disconnected request may already be charged, so the error now points to `task list` before any resubmission instead of leaving users to guess.
+
 ## 0.6.0 - 2026-08-26
 
 - Retired `gen omni-video` with a local redirect to `gen video -m gemini-omni-flash-preview`: the gateway rejects the Interactions endpoint for this model in every shape (video matrix evidence 2026-08-26). All four capabilities (t2v/first-frame/reference/edit) ride the video facade.
