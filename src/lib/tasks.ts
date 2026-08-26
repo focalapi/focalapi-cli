@@ -202,8 +202,29 @@ export async function pollTask(
   const timeoutMs = opts?.timeoutMs ?? 30 * 60_000;
   const deadline = Date.now() + timeoutMs;
   let last: TaskInfo | undefined;
+  // A dropped poll must never kill the wait: the task exists server-side and
+  // a status query is free (it can never double-charge). Transient network
+  // errors are retried with backoff; server answers (4xx/5xx bodies) still
+  // surface immediately (vid/img matrix evidence: mid-wait connection drops
+  // occurred in ~1.5% of 24-way concurrent runs and always recovered).
+  let transientFailures = 0;
   for (;;) {
-    last = await fetchTask(baseUrl, apiKey, taskId);
+    try {
+      last = await fetchTask(baseUrl, apiKey, taskId);
+      transientFailures = 0;
+    } catch (error) {
+      const transient = error instanceof ApiError && error.code === 'network_error';
+      if (!transient || ++transientFailures >= 5) {
+        if (transient) {
+          throw new ApiError('network_error', `连续 5 次状态查询失败：任务 ${taskId} 可能仍在运行`, {
+            hint: `网络抖动只中断了轮询，任务本身不受影响、也不会重复计费。网络恢复后运行：focalapi task status ${taskId} --wait --download`,
+          });
+        }
+        throw error;
+      }
+      await new Promise((r) => setTimeout(r, Math.min(intervalMs * transientFailures, 15_000)));
+      continue;
+    }
     opts?.onUpdate?.(last);
     if (last.status === 'success') return last;
     if (last.status === 'cancelled') {

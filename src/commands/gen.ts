@@ -390,17 +390,28 @@ export function registerGen(program: Command): void {
 
       const idempotencyKey = opts.wait === false ? resolveIdempotencyKey(opts.idempotencyKey) : undefined;
       warnDoubleEncodedReferenceURLs('--image', referenceImages);
-      const res = await withProgress(opts.wait === false ? '正在提交图像任务' : '正在生成图像', () => request<{ created?: number; data?: ImageResultItem[]; id?: string; status?: string; idempotent_replay?: boolean }>({
-        baseUrl: auth.baseUrl,
-        path: '/v1/images/generations',
-        apiKey: auth.apiKey,
-        body,
-        headers: {
-          ...(opts.wait === false ? { Prefer: 'respond-async' } : {}),
-          ...(idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : {}),
-        },
-        timeoutMs: 600_000,
-      }));
+      const res = await withProgress(opts.wait === false ? '正在提交图像任务' : '正在生成图像', () =>
+        request<{ created?: number; data?: ImageResultItem[]; id?: string; status?: string; idempotent_replay?: boolean }>({
+          baseUrl: auth.baseUrl,
+          path: '/v1/images/generations',
+          apiKey: auth.apiKey,
+          body,
+          headers: {
+            ...(opts.wait === false ? { Prefer: 'respond-async' } : {}),
+            ...(idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : {}),
+          },
+          timeoutMs: 600_000,
+        }).catch((error: unknown) => {
+          // 同步图像请求中途断连时任务可能已提交并计费——盲目重试会双扣。
+          // 给出 task list 恢复指引而不是让用户猜(2026-08-25/26 矩阵:等待
+          // 期断连在高并发下 ~1.5%,串行即恢复)。
+          if (error instanceof ApiError && error.code === 'network_error' && opts.wait !== false) {
+            throw new ApiError('network_error', error.message, {
+              hint: '连接中断时任务可能已提交并计费,请勿直接重试。先运行 focalapi task list --json 查看最近任务:若已存在则用 task status <id> --wait --download 续取;若没有再重新提交。',
+            });
+          }
+          throw error;
+        }));
       if (opts.wait === false) {
         const taskId = extractTaskId(res);
         if (!taskId) {

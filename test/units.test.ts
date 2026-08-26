@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { maskKey, sanitize } from '../src/lib/output.js';
 import { normalizeHomePath } from '../src/lib/config.js';
 import { extractProgress, extractTaskId, normalizeTaskStatus } from '../src/lib/tasks.js';
@@ -138,5 +138,30 @@ describe('validateVideoGeneration 新视频族本地契约(vid-matrix 2026-08-26
     expect(() => validateVideoGeneration('kling-v3-omni', { resolution: '4k', seconds: 5 })).not.toThrow();
     expect(() => validateVideoGeneration('happyhorse-1.1-i2v', { seconds: 5 })).not.toThrow();
     expect(() => validateVideoGeneration('wan2.7-t2v', { resolution: '4k' })).toThrow(/resolution must be one of/);
+  });
+});
+
+describe('pollTask 网络容错(轮询断连不弃任务)', () => {
+  it('连续 3 次网络失败后恢复并成功;连续 5 次才放弃且带续取指引', async () => {
+    let calls = 0;
+    vi.stubGlobal('fetch', vi.fn(async () => {
+      calls += 1;
+      if (calls <= 3) throw new TypeError('fetch failed');
+      return new Response(JSON.stringify({ task_id: 't1', status: 'success', files: ['x.mp4'] }), { status: 200 });
+    }));
+    const tasks = await import('../src/lib/tasks.js');
+    const info = await tasks.pollTask('https://example.test', 'sk-test', 't1', { intervalMs: 1, timeoutMs: 5_000 });
+    expect(info.status).toBe('success');
+    expect(calls).toBe(4);
+
+    let hardCalls = 0;
+    vi.stubGlobal('fetch', vi.fn(async () => {
+      hardCalls += 1;
+      throw new TypeError('fetch failed');
+    }));
+    await expect(tasks.pollTask('https://example.test', 'sk-test', 't2', { intervalMs: 1, timeoutMs: 5_000 }))
+      .rejects.toThrow(/t2 可能仍在运行/);
+    expect(hardCalls).toBe(5);
+    vi.unstubAllGlobals();
   });
 });
