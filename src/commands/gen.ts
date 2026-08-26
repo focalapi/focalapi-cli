@@ -115,17 +115,34 @@ async function saveImageItem(item: ImageResultItem, dir: string, base: string, a
   }
   if (item.url) {
     // Download signed upstream URLs directly. A same-origin FocalAPI URL may safely include the key.
-    const res = await fetch(item.url, {
-      headers: item.url.includes('focalapi') ? { Authorization: `Bearer ${apiKey}` } : undefined,
-      signal: AbortSignal.timeout(300_000),
-    });
-    if (!res.ok || !res.body) {
-      throw new ApiError('bad_response', `图像下载失败（HTTP ${res.status}）：${item.url.slice(0, 120)}`);
+    // Two retries with growing windows: slow links (proxies, concurrent
+    // batches) can take minutes for a multi-MB image, and the 2026-08-26
+    // stability probe showed a single 300s window failing deliveries while
+    // the platform had already produced and billed the image.
+    let lastError: unknown;
+    for (const timeoutMs of [600_000, 600_000, 900_000]) {
+      try {
+        const res = await fetch(item.url, {
+          headers: item.url.includes('focalapi') ? { Authorization: `Bearer ${apiKey}` } : undefined,
+          signal: AbortSignal.timeout(timeoutMs),
+        });
+        if (!res.ok || !res.body) {
+          throw new ApiError('bad_response', `图像下载失败（HTTP ${res.status}）：${item.url.slice(0, 120)}`);
+        }
+        const ext = res.headers.get('content-type')?.includes('jpeg') ? '.jpg' : '.png';
+        const filePath = join(dir, `${base}${ext}`);
+        await pipeline(Readable.fromWeb(res.body as import('node:stream/web').ReadableStream), createWriteStream(filePath));
+        return filePath;
+      } catch (error) {
+        lastError = error;
+      }
     }
-    const ext = res.headers.get('content-type')?.includes('jpeg') ? '.jpg' : '.png';
-    const filePath = join(dir, `${base}${ext}`);
-    await pipeline(Readable.fromWeb(res.body as import('node:stream/web').ReadableStream), createWriteStream(filePath));
-    return filePath;
+    // The generation succeeded and was billed - never suggest a blind retry.
+    throw new ApiError('download_timeout',
+      `图像已生成并计费，但 3 次下载尝试均未完成（慢速链路/代理拥塞）。`,
+      {
+        hint: `请勿重新提交（会再次计费）。稍后直接下载产物：${item.url}`,
+      });
   }
   throw new ApiError('bad_response', '图像结果既没有 url 也没有 b64_json');
 }
