@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.6.2 - 2026-08-26
+
+- Image downloads now retry across three windows (600s/600s/900s) instead of a single 300s abort. The stability probe proved the 300s window was failing deliveries over slow proxied links while the platform had already generated and billed the image (server-side completion 43-47s; the abort text was Node's own AbortSignal message, not an upstream error).
+- When all download attempts fail, the error carries the artifact URL and an explicit warning that resubmission would charge again - the image is already produced.
+
 ## 0.6.1 - 2026-08-26
 
 - Resilient task polling: `task status --wait`, `gen video` waits, and every internal poll now tolerate up to 5 consecutive network failures with backoff. A dropped status query no longer kills a running task's wait - polling again is free and can never double-charge - and a give-up error carries the exact `task status <id> --wait --download` recovery command.
