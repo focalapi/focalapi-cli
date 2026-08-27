@@ -334,12 +334,12 @@ const VIDEO_CONSTRAINTS: Record<string, VideoGenerationConstraint> = {
   },
   'ltx-2-5-fast': {
     resolutions: ['1280x720', '720x1280', '1920x1080', '1080x1920', '2560x1440', '1440x2560', '3840x2160', '2160x3840'],
-    minSeconds: 6, maxSeconds: 20, allowedSeconds: [6, 8, 10, 12, 14, 16, 18, 20],
+    minSeconds: 2, maxSeconds: 20, allowedSeconds: [2, 4, 6, 8, 10, 12, 14, 16, 18, 20],
     allowedFps: [24, 25, 48, 50], maxReferenceImages: 2, supportsGenerateAudio: true,
   },
   'ltx-2-5-pro': {
     resolutions: ['1280x720', '720x1280', '1920x1080', '1080x1920'],
-    minSeconds: 6, maxSeconds: 10, allowedSeconds: [6, 8, 10],
+    minSeconds: 2, maxSeconds: 10, allowedSeconds: [2, 4, 6, 8, 10],
     allowedFps: [24, 25, 50], maxReferenceImages: 2, supportsGenerateAudio: true,
   },
   'wan2.7-t2v': { resolutions: ['720p', '1080p'], minSeconds: 2, maxSeconds: 15 },
@@ -348,8 +348,8 @@ const VIDEO_CONSTRAINTS: Record<string, VideoGenerationConstraint> = {
   'wan2.7-videoedit': { resolutions: ['720p', '1080p'], minSeconds: 2, maxSeconds: 10 },
   'pixverse-v5': { resolutions: ['360p', '540p', '720p', '1080p'], minSeconds: 5, maxSeconds: 8, allowedSeconds: [5, 8] },
   'kling-v3-omni': { resolutions: ['720p', '1080p', '4k'], minSeconds: 3, maxSeconds: 15 },
-  'luma-ray-3-2': { resolutions: ['540p', '720p', '1080p'], minSeconds: 5, maxSeconds: 10, allowedSeconds: [5, 10] },
-  'MiniMax-H3': { resolutions: ['768p', '2k'], minSeconds: 5, maxSeconds: 15 },
+  'luma-ray-3-2': { resolutions: ['360p', '540p', '720p', '1080p'], minSeconds: 5, maxSeconds: 10, allowedSeconds: [5, 10] },
+  'MiniMax-H3': { resolutions: ['768p', '2k'], minSeconds: 4, maxSeconds: 15 },
   'heygen-talking-photo': { resolutions: ['720p', '1080p'], noDuration: true },
   'heygen-avatar': { resolutions: ['720p', '1080p'], noDuration: true },
   'happyhorse-1.1-t2v': { resolutions: ['720p', '1080p'], minSeconds: 3, maxSeconds: 15 },
@@ -360,6 +360,20 @@ const VIDEO_CONSTRAINTS: Record<string, VideoGenerationConstraint> = {
   'hitpaw-video-enhance': { resolutions: ['original', '720p', '1080p', '2k/qhd', '4k/uhd', '8k'], noDuration: true },
   'beeble-switchx-video': { resolutions: ['720p', '1080p'], noDuration: true },
   'bria-video-edit': { noDuration: true },
+  // 2026-08-27 批次 D：Vidu Q2 续写（源视频 4-55s 经 --content 传入，
+  // 追加 1-7s）；Kling 口型同步（音频/文本驱动，源视频 2-10s）；HeyGen
+  // 视频翻译（源视频 + --content 或 metadata.output_language）。
+  'viduq2-pro-extend': {
+    resolutions: ['720p', '1080p'], minSeconds: 1, maxSeconds: 7,
+    supportsSeed: true, maxSeed: 2147483647,
+  },
+  'viduq2-turbo-extend': {
+    resolutions: ['720p', '1080p'], minSeconds: 1, maxSeconds: 7,
+    supportsSeed: true, maxSeed: 2147483647,
+  },
+  'kling-lipsync-audio': { noDuration: true },
+  'kling-lipsync-text': { noDuration: true, maxPromptRunes: 120 },
+  'heygen-video-translate': { noDuration: true },
   'veo-3.1-generate-preview': {
     resolutions: ['720p', '1080p'], minSeconds: 4, maxSeconds: 8, allowedSeconds: [4, 6, 8],
   },

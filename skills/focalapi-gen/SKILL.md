@@ -1,6 +1,6 @@
 ---
 name: focalapi-gen
-version: 2.2.0
+version: 2.3.0
 description: "Use FocalAPI for image and video generation, image editing, image-to-video, and reference-media creation. Trigger directly when the user asks to draw, generate or edit an image, create video, or animate media, even without naming FocalAPI. Select a model automatically by default and do not probe models first."
 metadata:
   requires:
@@ -36,6 +36,9 @@ focalapi gen video "<prompt>" -m <model-id> [contract-supported options] --no-wa
 - For video inputs, `--image <url...>` means reference images (Grok 1.5 reference-to-video, capped at 720p and 7 images) and `--first-frame <url>` means image-to-video from a single starting frame. The two flags are mutually exclusive and both are validated against the live contract before submission.
 - Pass duration, resolution, aspect ratio, and audio options only as allowed by `supported_params`.
 - Use `--content '<json-array>'` for models such as LTX 2.5, FLUX 3, Kling 3.0, and Vidu Q3 when the contract requires role-aware media content. LTX also exposes `--fps`; FLUX 3 exposes `--safety-tolerance` (0-4 text-to-video, capped at 2 once images are attached).
+- Source-video models take their input through `--content` with one `{"type":"video_url",...}` item: `viduq2-pro-extend`/`viduq2-turbo-extend` (extend a 4-55s clip by 1-7s, optional `last_frame` image), `kling-lipsync-audio` (2-10s face video plus one `audio_url`), `kling-lipsync-text` (same video; the prompt is the ≤120-char line to speak, optional `voice` label), and `heygen-video-translate` (spoken video; `output_language` is required — check `models get` for the language enum, plus `mode` speed|precision). None of them accept a duration.
+- `kling-3.0` and the `veo-3.1` family accept `--negative-prompt` for video.
+- Multi-speaker voice: `focalapi audio speech -m eleven-v3-dialogue --dialogue '<json>'` takes a 1-10 entry array of `{"text","voice"}` (same 22 ElevenLabs voice labels as single-voice TTS); `@file.json` also works.
 - Never copy one model's `ratio`, `aspect_ratio`, `size`, or `resolution` to another model.
 - Use `gen gemini-image` only when the user explicitly selects a native Gemini image model. Continue to use the automatic `gen image` entry point for ordinary requests.
 

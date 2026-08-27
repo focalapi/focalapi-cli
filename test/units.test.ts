@@ -134,10 +134,21 @@ describe('validateVideoGeneration 新视频族本地契约(vid-matrix 2026-08-26
     expect(() => validateVideoGeneration('wan2.7-videoedit', { seconds: 11 })).toThrow(/seconds must be 2-10/);
     expect(() => validateVideoGeneration('pixverse-v5', { seconds: 6 })).toThrow(/seconds must be one of 5, 8/);
     expect(() => validateVideoGeneration('luma-ray-3-2', { seconds: 7 })).toThrow(/seconds must be one of 5, 10/);
-    expect(() => validateVideoGeneration('MiniMax-H3', { seconds: 3 })).toThrow(/seconds must be 5-15/);
+    expect(() => validateVideoGeneration('MiniMax-H3', { seconds: 3 })).toThrow(/seconds must be 4-15/);
     expect(() => validateVideoGeneration('kling-v3-omni', { resolution: '4k', seconds: 5 })).not.toThrow();
     expect(() => validateVideoGeneration('happyhorse-1.1-i2v', { seconds: 5 })).not.toThrow();
     expect(() => validateVideoGeneration('wan2.7-t2v', { resolution: '4k' })).toThrow(/resolution must be one of/);
+    // 2026-08-27 批次 B/D：LTX 2s 档放开；Vidu Q2 续写 1-7s + seed；
+    // 口型同步/翻译为源长族；luma 360p 档。
+    expect(() => validateVideoGeneration('ltx-2-5-fast', { seconds: 2 })).not.toThrow();
+    expect(() => validateVideoGeneration('ltx-2-5-pro', { seconds: 3 })).toThrow(/seconds must be one of 2, 4/);
+    expect(() => validateVideoGeneration('luma-ray-3-2', { resolution: '360p', seconds: 5 })).not.toThrow();
+    expect(() => validateVideoGeneration('viduq2-pro-extend', { seconds: 8 })).toThrow(/seconds must be 1-7/);
+    expect(() => validateVideoGeneration('viduq2-turbo-extend', { seconds: 4, resolution: '1080p', seed: 42 })).not.toThrow();
+    expect(() => validateVideoGeneration('viduq2-turbo-extend', { resolution: '4k' })).toThrow(/resolution must be one of 720p, 1080p/);
+    expect(() => validateVideoGeneration('kling-lipsync-audio', { seconds: 5 })).toThrow(/does not accept a duration/);
+    expect(() => validateVideoGeneration('kling-lipsync-text', { seconds: 5 })).toThrow(/does not accept a duration/);
+    expect(() => validateVideoGeneration('heygen-video-translate', { seconds: 5 })).toThrow(/does not accept a duration/);
   });
 });
 

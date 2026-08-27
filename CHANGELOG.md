@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.7.5 - 2026-08-27
+
+- Local contracts for the six new platform models: viduq2-pro-extend /
+  viduq2-turbo-extend (1-7s, 720p/1080p, seed), kling-lipsync-audio /
+  kling-lipsync-text (source-length; text variant caps the prompt at 120
+  characters), heygen-video-translate (source-length), and eleven-v3-dialogue
+  via the new `audio speech --dialogue` JSON array (1-10 {text, voice} lines,
+  optional --stability / --language-code; `@file.json` supported).
+- `gen video --negative-prompt` now wires metadata.negative_prompt (official
+  parameter of kling-3.0 and the veo-3.1 family since the 2026-08-27 gateway
+  batch).
+- Boundary sync with the gateway's 2026-08-27 node-source audit: LTX 2.5
+  duration grid opens at 2s, luma-ray-3-2 gains the 360p tier, MiniMax-H3
+  duration floor drops to 4s.
+- Injection skills updated: focalapi-gen documents the source-video models
+  (--content video_url) and the dialogue flow; focalapi-chat shows the
+  dialogue speech example.
+
 ## 0.7.4 - 2026-08-26
 
 - Added --voices flag to audio speech for Fish Audio models that take a voices array instead of a singular voice parameter.

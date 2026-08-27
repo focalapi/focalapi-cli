@@ -24,6 +24,7 @@ Use audio commands only when both `focalapi models get <model-id> --json` and `f
 ```bash
 focalapi audio transcribe <file> -m <model-id> --json
 focalapi audio speech "<text>" -m <model-id> -o <file> --json
+focalapi audio speech -m eleven-v3-dialogue --dialogue '<[{"text":"...","voice":"Sarah (female, american)"}]>' -o <file> --json
 ```
 
 A name appearing in the model list does not prove that the CLI supports calling it. If the current key has no audio model contract, state that audio is unavailable; do not try a similar model or an external API.

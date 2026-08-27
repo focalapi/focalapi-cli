@@ -578,6 +578,7 @@ export function registerGen(program: Command): void {
     .option('--execution-expires-after <seconds>', '任务过期秒数（3600–259200）', (v) => Number.parseInt(v, 10))
     .option('--safety-identifier <identifier>', 'Seedance 安全标识符（1–64 个可打印 ASCII 字符）')
     .option('--omni-reference-task-type <type>', 'Seedance 2.5 多模态任务类型：auto、reference、edit 或 extend（编辑/延长参考视频时必填，auto 会与默认时长冲突）')
+    .option('--negative-prompt <text>', '负面提示词（仅支持该参数的模型生效，如 kling-3.0、veo-3.1 系列）')
     .option('--voice <label>', 'HeyGen 语音标签（talking-photo 剧本必填；合法值见 models get heygen-talking-photo 的 voice 枚举）')
     .option('--avatar <label>', 'HeyGen Avatar 形象标签（heygen-avatar 必填；合法值见 models get heygen-avatar 的 avatar 枚举）')
     .option('--operation <op>', 'Bria 视频操作：remove_background、green_screen 或 replace_background')
@@ -596,7 +597,7 @@ export function registerGen(program: Command): void {
           model?: string; seconds?: number; duration?: number; size?: string; resolution?: string; ratio?: string; aspectRatio?: string; seed?: number; fps?: number; safetyTolerance?: number; image?: string[]; firstFrame?: string; content?: string; idempotencyKey?: string;
           generateAudio?: boolean; watermark?: boolean; serviceTier?: string; priority?: number; callbackUrl?: string;
           returnLastFrame?: boolean; executionExpiresAfter?: number; safetyIdentifier?: string;
-          omniReferenceTaskType?: string; voice?: string; avatar?: string; operation?: string; enhanceModel?: string; upscalerModel?: string;
+          omniReferenceTaskType?: string; voice?: string; avatar?: string; operation?: string; enhanceModel?: string; upscalerModel?: string; negativePrompt?: string;
           wait?: boolean; pollInterval: number; timeout: number; out: string;
         },
         cmd: Command,
@@ -642,6 +643,7 @@ export function registerGen(program: Command): void {
           }
           body.omni_reference_task_type = taskType;
         }
+        if (opts.negativePrompt) metadata.negative_prompt = opts.negativePrompt;
         if (opts.voice) body.voice = opts.voice;
         if (opts.avatar) body.avatar = opts.avatar;
         if (opts.operation) {
