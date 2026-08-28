@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.7.8 - 2026-08-29
+
+- gemini-2.5-flash-image accepts 1-10 reference images (multiple references
+  are batched into the model's images input upstream via BatchImagesNode);
+  the old single-image and inlineData-only local restrictions are removed -
+  URL references ride fileData parts.
+- gemini-3.1-flash-lite-image image-size surface is now 1K/2K/4K: 2K/4K are
+  disclosed composite output (native 1K generation, then wavespeed-seedvr2
+  same-ratio upscale); task results carry native_resolution /
+  output_resolution / postprocess disclosure fields.
+- gemini-3.1-flash-image keeps 1K/2K/4K locally: the official 512 tier
+  (alias 0.5K) is rejected by the partner node enum (live evidence
+  2026-08-29, the gateway refuses it before charging) - the CLI blocks it
+  instead of sending a doomed request.
+- Sampling params help now states flash/lite support (both do).
+
 ## 0.7.7 - 2026-08-28
 
 - gpt-image-2 quality: omitted/auto is accepted again per the platform
