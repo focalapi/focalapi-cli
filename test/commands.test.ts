@@ -283,7 +283,7 @@ describe('gen image', () => {
     );
 
     const outDir = join(ctx.homeDir, 'image-edit-out');
-    expect(await main(argv('gen', 'image', 'edit', '-m', 'gpt-image-2', '--image', 'https://example.com/source.png', '--mask', 'https://example.com/mask.png', '--response-format', 'b64_json', '-o', outDir, '--json'))).toBe(0);
+    expect(await main(argv('gen', 'image', 'edit', '-m', 'gpt-image-2', '--quality', 'medium', '--image', 'https://example.com/source.png', '--mask', 'https://example.com/mask.png', '--response-format', 'b64_json', '-o', outDir, '--json'))).toBe(0);
     expect(capturedBody).toMatchObject({
       image: ['https://example.com/source.png'],
       mask: 'https://example.com/mask.png',

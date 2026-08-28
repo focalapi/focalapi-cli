@@ -15,6 +15,10 @@ export type SupportedParameter = {
 
 type ImageGenerationConstraint = {
   defaultSize?: string;
+  /** Quality must be set explicitly (gpt-image-2: the provider node cannot preserve the official auto default). */
+  requiredQuality?: boolean;
+  /** size=auto passthrough family (gpt-image-2 official auto default). */
+  sizeAuto?: boolean;
   maxN: number;
   sizeTiers?: string[];
   /** Allowed exact sizes from the official table (recraft V4). */
@@ -109,7 +113,12 @@ const KREA_IMAGE_ASPECT_RATIOS = ['1:1', '4:3', '3:2', '16:9', '2.35:1', '4:5', 
 
 const IMAGE_CONSTRAINTS: Record<string, ImageGenerationConstraint> = {
   'gpt-image-2': {
-    defaultSize: '1024x1024',
+    // 2026-08-28 语义整改：quality 必填（节点无法保持官方 auto，省略/
+    // auto 会被服务端预提交拒绝）；size 官方默认 auto 原样透传；custom
+    // 尺寸走官方四约束+节点 1024 最小边。
+    requiredQuality: true,
+    sizeAuto: true,
+    defaultSize: 'auto',
     maxN: 8,
     maxReferenceImages: 16,
     minMegapixels: 0.65536,
@@ -120,6 +129,10 @@ const IMAGE_CONSTRAINTS: Record<string, ImageGenerationConstraint> = {
     maxAspectRatio: 3,
     qualities: ['low', 'medium', 'high'],
     backgrounds: ['auto', 'opaque'],
+  },
+  'workflow-face-swap': {
+    minImageCount: 2,
+    maxN: 1,
   },
   'seedream-4-0-250828': {
     defaultSize: '2k',
@@ -502,6 +515,12 @@ export function validateImageGeneration(
   if (input.hasMask && model === 'gpt-image-2' && input.imageCount !== 1) {
     throw new ApiError('invalid_request', 'gpt-image-2 mask requires exactly one reference image');
   }
+  if (constraint.requiredQuality && !input.quality) {
+    throw new ApiError('invalid_request', `${model} requires an explicit --quality (low, medium, or high): the provider node cannot preserve the official auto default, and the gateway rejects omitted/auto before billing`);
+  }
+  if (constraint.requiredQuality && input.quality === 'auto') {
+    throw new ApiError('invalid_request', `${model} quality=auto is not preservable through this provider (node enum low/medium/high); the gateway rejects it before billing — pick an explicit tier`);
+  }
   validateOptionalChoice(model, 'quality', input.quality, constraint.qualities);
   validateOptionalChoice(model, 'background', input.background, constraint.backgrounds);
   validateOptionalChoice(model, 'aspect_ratio', input.aspectRatio, constraint.aspectRatios);
@@ -550,6 +569,10 @@ export function validateImageGeneration(
     throw new ApiError('invalid_request', `${model} does not support watermark`);
   }
 
+  if (constraint.sizeAuto) {
+    // 官方 size=auto 语义：省略或显式 auto 原样透传，不落固定尺寸。
+    if (!input.size || input.size.toLowerCase() === 'auto') return;
+  }
   if (!constraint.defaultSize) {
     if (input.size) {
       throw new ApiError('invalid_request', `${model} does not support size; use its aspect_ratio or resolution parameter`);

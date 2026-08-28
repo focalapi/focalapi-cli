@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.7.6 - 2026-08-28
+
+- gpt-image-2 contract sync with the gateway's semantic remediation: --quality
+  is now required locally (omitted or auto is rejected with the provider
+  explanation before any request leaves the machine); --size defaults to auto
+  and passes the official auto semantics through; explicit sizes keep the
+  official constraints plus the 1024px provider minimum edge.
+- New local contract for workflow-face-swap: exactly two input images (target
+  scene first, face second), n fixed at 1.
+- Injection skill updated with both model notes.
+
 ## 0.7.5 - 2026-08-27
 
 - Local contracts for the six new platform models: viduq2-pro-extend /

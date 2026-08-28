@@ -152,6 +152,29 @@ describe('validateVideoGeneration 新视频族本地契约(vid-matrix 2026-08-26
   });
 });
 
+describe('validateImageGeneration gpt-image-2 整改契约(2026-08-28)', () => {
+  it('quality 必填：省略/auto 本地拒绝；三档原样放行', () => {
+    expect(() => validateImageGeneration('gpt-image-2', { n: 1 })).toThrow(/requires an explicit --quality/);
+    expect(() => validateImageGeneration('gpt-image-2', { n: 1, quality: 'auto' })).toThrow(/quality=auto is not preservable/);
+    for (const tier of ['low', 'medium', 'high']) {
+      expect(() => validateImageGeneration('gpt-image-2', { n: 1, quality: tier })).not.toThrow();
+    }
+  });
+  it('size auto：省略与显式 auto 放行；非法 custom 尺寸本地拒绝', () => {
+    expect(() => validateImageGeneration('gpt-image-2', { n: 1, quality: 'medium' })).not.toThrow();
+    expect(() => validateImageGeneration('gpt-image-2', { n: 1, quality: 'medium', size: 'auto' })).not.toThrow();
+    expect(() => validateImageGeneration('gpt-image-2', { n: 1, quality: 'medium', size: '1024x1024' })).not.toThrow();
+    expect(() => validateImageGeneration('gpt-image-2', { n: 1, quality: 'medium', size: '1008x1024' })).toThrow(/edge multiples of 16/);
+    expect(() => validateImageGeneration('gpt-image-2', { n: 1, quality: 'medium', size: '3840x1216' })).toThrow(/ratio must not exceed 3/);
+    expect(() => validateImageGeneration('gpt-image-2', { n: 1, quality: 'medium', size: '1024x608' })).toThrow(/does not support size/);
+  });
+  it('workflow-face-swap：双图必填、n 固定 1', () => {
+    expect(() => validateImageGeneration('workflow-face-swap', { imageCount: 1, n: 1 })).toThrow(/at least 2/);
+    expect(() => validateImageGeneration('workflow-face-swap', { imageCount: 2, n: 2 })).toThrow(/n must be 1-1/);
+    expect(() => validateImageGeneration('workflow-face-swap', { imageCount: 2, n: 1 })).not.toThrow();
+  });
+});
+
 describe('pollTask 网络容错(轮询断连不弃任务)', () => {
   it('连续 3 次网络失败后恢复并成功;连续 5 次才放弃且带续取指引', async () => {
     let calls = 0;
