@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.7.7 - 2026-08-28
+
+- gpt-image-2 quality: omitted/auto is accepted again per the platform
+  ruling and resolves to the effective tier medium (the provider node enum
+  lacks auto); the local required-quality rejection is removed. Explicit
+  low/medium/high passes through; metadata discloses the effective tier.
+
 ## 0.7.6 - 2026-08-28
 
 - gpt-image-2 contract sync with the gateway's semantic remediation: --quality

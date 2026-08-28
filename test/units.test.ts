@@ -152,13 +152,14 @@ describe('validateVideoGeneration 新视频族本地契约(vid-matrix 2026-08-26
   });
 });
 
-describe('validateImageGeneration gpt-image-2 整改契约(2026-08-28)', () => {
-  it('quality 必填：省略/auto 本地拒绝；三档原样放行', () => {
-    expect(() => validateImageGeneration('gpt-image-2', { n: 1 })).toThrow(/requires an explicit --quality/);
-    expect(() => validateImageGeneration('gpt-image-2', { n: 1, quality: 'auto' })).toThrow(/quality=auto is not preservable/);
+describe('validateImageGeneration gpt-image-2 整改契约(2026-08-28 v2)', () => {
+  it('quality 省略/auto 放行（网关归一 medium）；三档原样放行', () => {
+    expect(() => validateImageGeneration('gpt-image-2', { n: 1 })).not.toThrow();
+    expect(() => validateImageGeneration('gpt-image-2', { n: 1, quality: 'auto' })).not.toThrow();
     for (const tier of ['low', 'medium', 'high']) {
       expect(() => validateImageGeneration('gpt-image-2', { n: 1, quality: tier })).not.toThrow();
     }
+    expect(() => validateImageGeneration('gpt-image-2', { n: 1, quality: 'ultra' })).toThrow(/quality must be one of/);
   });
   it('size auto：省略与显式 auto 放行；非法 custom 尺寸本地拒绝', () => {
     expect(() => validateImageGeneration('gpt-image-2', { n: 1, quality: 'medium' })).not.toThrow();

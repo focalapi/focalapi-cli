@@ -15,8 +15,8 @@ export type SupportedParameter = {
 
 type ImageGenerationConstraint = {
   defaultSize?: string;
-  /** Quality must be set explicitly (gpt-image-2: the provider node cannot preserve the official auto default). */
-  requiredQuality?: boolean;
+  /** Omitted/auto quality resolves to this effective tier (gpt-image-2: node enum lacks auto, ruling 2026-08-28). */
+  autoQualityTier?: 'low' | 'medium' | 'high';
   /** size=auto passthrough family (gpt-image-2 official auto default). */
   sizeAuto?: boolean;
   maxN: number;
@@ -113,10 +113,10 @@ const KREA_IMAGE_ASPECT_RATIOS = ['1:1', '4:3', '3:2', '16:9', '2.35:1', '4:5', 
 
 const IMAGE_CONSTRAINTS: Record<string, ImageGenerationConstraint> = {
   'gpt-image-2': {
-    // 2026-08-28 语义整改：quality 必填（节点无法保持官方 auto，省略/
-    // auto 会被服务端预提交拒绝）；size 官方默认 auto 原样透传；custom
-    // 尺寸走官方四约束+节点 1024 最小边。
-    requiredQuality: true,
+    // 2026-08-28 整改 v2（用户定案）：省略/auto quality 按官方默认 auto
+    // 处理，有效档位 medium（节点枚举无 auto）；size 官方默认 auto 原样
+    // 透传；custom 尺寸走官方四约束+节点 1024 最小边。
+    autoQualityTier: 'medium',
     sizeAuto: true,
     defaultSize: 'auto',
     maxN: 8,
@@ -515,11 +515,8 @@ export function validateImageGeneration(
   if (input.hasMask && model === 'gpt-image-2' && input.imageCount !== 1) {
     throw new ApiError('invalid_request', 'gpt-image-2 mask requires exactly one reference image');
   }
-  if (constraint.requiredQuality && !input.quality) {
-    throw new ApiError('invalid_request', `${model} requires an explicit --quality (low, medium, or high): the provider node cannot preserve the official auto default, and the gateway rejects omitted/auto before billing`);
-  }
-  if (constraint.requiredQuality && input.quality === 'auto') {
-    throw new ApiError('invalid_request', `${model} quality=auto is not preservable through this provider (node enum low/medium/high); the gateway rejects it before billing — pick an explicit tier`);
+  if (constraint.autoQualityTier && (!input.quality || input.quality === 'auto')) {
+    input.quality = constraint.autoQualityTier;
   }
   validateOptionalChoice(model, 'quality', input.quality, constraint.qualities);
   validateOptionalChoice(model, 'background', input.background, constraint.backgrounds);
