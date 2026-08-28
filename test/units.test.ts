@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { maskKey, sanitize } from '../src/lib/output.js';
 import { normalizeHomePath } from '../src/lib/config.js';
 import { extractProgress, extractTaskId, normalizeTaskStatus } from '../src/lib/tasks.js';
-import { validateImageGeneration, validateVideoGeneration } from '../src/lib/model-capabilities.js';
+import { validateImageGeneration, validateVideoGeneration, validateGeminiImageGeneration } from '../src/lib/model-capabilities.js';
 
 describe('normalizeHomePath（Windows MSYS 路径防御）', () => {
   it('MSYS 风格转 Windows 原生；普通路径原样返回', () => {
@@ -92,6 +92,20 @@ describe('validateImageGeneration 新图像族本地契约', () => {
   it('Gemini 图像模型在 gen image 上本地拦截并指向 gen gemini-image（P07）', () => {
     expect(() => validateImageGeneration('gemini-3-pro-image', base)).toThrow(/gen gemini-image/);
     expect(() => validateImageGeneration('gemini-2.5-flash-image', base)).toThrow(/gen gemini-image/);
+  });
+
+  it('Gemini 图像契约同步 2026-08-29：2.5-flash 10 参考图、lite 复合 2K/4K、flash 拒 512', () => {
+    // BaoPix 阻塞 1：2.5-flash 多参考图 1-10 张（多张经批量图像节点链），第 11 张本地拦截。
+    expect(() => validateGeminiImageGeneration('gemini-2.5-flash-image', { referenceImageCount: 10 })).not.toThrow();
+    expect(() => validateGeminiImageGeneration('gemini-2.5-flash-image', { referenceImageCount: 11 })).toThrow(/at most 10 reference images/);
+    // BaoPix 阻塞 3：lite 2K/4K 是披露复合输出（原生 1K + SeedVR2 放大），本地放行。
+    expect(() => validateGeminiImageGeneration('gemini-3.1-flash-lite-image', { imageSize: '2K' })).not.toThrow();
+    expect(() => validateGeminiImageGeneration('gemini-3.1-flash-lite-image', { imageSize: '4k' })).not.toThrow();
+    // BaoPix 阻塞 2：512/0.5K 是官方档位但节点枚举不收（2026-08-29 实证），
+    // 网关扣费前拒绝——本地直接按枚举拦截，不发注定失败的请求。
+    expect(() => validateGeminiImageGeneration('gemini-3.1-flash-image', { imageSize: '512' })).toThrow(/imageSize must be one of 1K, 2K, 4K/);
+    expect(() => validateGeminiImageGeneration('gemini-3.1-flash-image', { imageSize: '0.5K' })).toThrow(/imageSize must be one of 1K, 2K, 4K/);
+    expect(() => validateGeminiImageGeneration('gemini-3.1-flash-image', { imageSize: '2K' })).not.toThrow();
   });
 
   it('增强/超分/矢量化族要求恰好一张输入图', () => {

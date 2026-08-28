@@ -475,16 +475,15 @@ export function registerGen(program: Command): void {
     .option('--image <url...>', 'Gemini reference image URL, data URI, or local path (@C:/path/x.jpg); repeatable')
     .option('--system <text>', 'Gemini systemInstruction text')
     .option('--seed <n>', 'Non-negative Gemini generation seed', (v) => Number.parseInt(v, 10))
-    .option('--thinking-level <level>', 'Nano Banana 2 Lite: MINIMAL or HIGH')
-    .option('--temperature <n>', 'Nano Banana 2 Lite: 0 through 2', (v) => Number.parseFloat(v))
-    .option('--top-p <n>', 'Nano Banana 2 Lite: 0 through 1', (v) => Number.parseFloat(v))
+    .option('--thinking-level <level>', 'Nano Banana 2 flash/lite: MINIMAL or HIGH')
+    .option('--temperature <n>', 'Nano Banana 2 flash/lite: 0 through 2', (v) => Number.parseFloat(v))
+    .option('--top-p <n>', 'Nano Banana 2 flash/lite: 0 through 1', (v) => Number.parseFloat(v))
     .action(async (promptParts: string[], opts: { model: string; aspectRatio?: string; imageSize?: string; responseModalities?: string; image?: string[]; system?: string; seed?: number; thinkingLevel?: string; temperature?: number; topP?: number; config?: string; out: string }, cmd: Command) => {
       const g = cmd.optsWithGlobals() as GlobalOpts;
       const auth = resolveAuth(g);
       const geminiReferenceImages = await resolveMediaInputs(opts.image ?? []);
       validateGeminiImageGeneration(opts.model, {
         referenceImageCount: geminiReferenceImages.length,
-        nonDataUriReferenceCount: geminiReferenceImages.filter((source) => !source.startsWith('data:')).length,
         aspectRatio: opts.aspectRatio,
         imageSize: opts.imageSize,
         seed: opts.seed,

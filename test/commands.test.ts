@@ -548,11 +548,17 @@ describe('gen gemini-image documented fields', () => {
   it('3.1-flash accepts the extended ratio surface and sampling params; 2.5-flash enforces its reference limits', async () => {
     const png = Buffer.from('gemini-png-bytes').toString('base64');
     let capturedBody: Record<string, unknown> | undefined;
+    let referenceParts = 0;
     vi.stubGlobal(
       'fetch',
       mockFetchRouter({
         '/v1beta/models/gemini-3.1-flash-image:generateContent': (init) => {
           capturedBody = JSON.parse(String(init?.body)) as Record<string, unknown>;
+          return { candidates: [{ content: { parts: [{ inlineData: { mimeType: 'image/png', data: png } }] } }] };
+        },
+        '/v1beta/models/gemini-2.5-flash-image:generateContent': (init) => {
+          const body = JSON.parse(String(init?.body)) as { contents: { parts: Record<string, unknown>[] }[] };
+          referenceParts = (body.contents[0]?.parts ?? []).filter((p) => p.inlineData || p.fileData).length;
           return { candidates: [{ content: { parts: [{ inlineData: { mimeType: 'image/png', data: png } }] } }] };
         },
       }),
@@ -563,15 +569,29 @@ describe('gen gemini-image documented fields', () => {
     ))).toBe(0);
     expect(capturedBody).toMatchObject({ generationConfig: { thinkingConfig: { thinkingLevel: 'HIGH' } } });
 
-    const spy = mockFetchRouter({});
-    vi.stubGlobal('fetch', spy);
-    // 2.5-flash: at most 1 reference image, and it must be an inline data URI.
+    // 2026-08-29（BaoPix 阻塞 1）：2.5-flash 多参考图解锁——2 张 data URI
+    // 与 10 张混合（data URI + URL）都合法，全部参考图进入 contents
+    //（URL 引用走 fileData 部分，不再被本地拒绝）。
     expect(await main(argv(
       'gen', 'gemini-image', 'x', '-m', 'gemini-2.5-flash-image',
-      '--image', 'data:image/png;base64,ZmFrZQ==', 'data:image/png;base64,ZmFrZQ==', '--json',
-    ))).toBe(1);
+      '--image', 'data:image/png;base64,ZmFrZQ==', 'data:image/png;base64,ZmFrZQ==',
+      '-o', join(ctx.homeDir, 'g25-out'), '--json',
+    ))).toBe(0);
+    expect(referenceParts).toBe(2);
+    const mixed = ['data:image/png;base64,ZmFrZQ=='];
+    for (let i = 0; i < 9; i++) mixed.push('https://example.com/a.png');
     expect(await main(argv(
-      'gen', 'gemini-image', 'x', '-m', 'gemini-2.5-flash-image', '--image', 'https://example.com/a.png', '--json',
+      'gen', 'gemini-image', 'x', '-m', 'gemini-2.5-flash-image', '--image', ...mixed,
+      '-o', join(ctx.homeDir, 'g25-out'), '--json',
+    ))).toBe(0);
+    expect(referenceParts).toBe(10);
+
+    const spy = mockFetchRouter({});
+    vi.stubGlobal('fetch', spy);
+    // 2.5-flash: 第 11 张参考图本地拦截（上游上限 10）。
+    const overflow = Array.from({ length: 11 }, () => 'data:image/png;base64,ZmFrZQ==');
+    expect(await main(argv(
+      'gen', 'gemini-image', 'x', '-m', 'gemini-2.5-flash-image', '--image', ...overflow, '--json',
     ))).toBe(1);
     // Sampling params stay rejected on 2.5-flash.
     expect(await main(argv(

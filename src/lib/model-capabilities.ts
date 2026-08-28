@@ -91,8 +91,6 @@ type GeminiImageConstraint = {
   imageSizes?: string[];
   supportsSampling: boolean;
   maxReferenceImages?: number;
-  /** Reference images must be base64 data URIs (inlineData); fileUri is rejected upstream. */
-  referenceImagesInlineDataOnly?: boolean;
   maxSeed?: number;
 };
 
@@ -420,19 +418,28 @@ const COMMON_GEMINI_RATIOS = ['auto', '1:1', '2:3', '3:2', '3:4', '4:3', '4:5', 
 const EXTENDED_GEMINI_RATIOS = [...COMMON_GEMINI_RATIOS, '1:4', '4:1', '1:8', '8:1'];
 const GEMINI_IMAGE_CONSTRAINTS: Record<string, GeminiImageConstraint> = {
   'gemini-2.5-flash-image': {
+    // 2026-08-29（BaoPix 阻塞 1）：多参考图解锁——1-10 张经 BatchImagesNode
+    // 链进 v1 节点 images 输入；旧 R27「单张 + 仅 inlineData」收窄已解除，
+    // fileUri/fileData 参考图同样可执行。
     aspectRatios: COMMON_GEMINI_RATIOS, supportsSampling: false,
-    maxReferenceImages: 1, referenceImagesInlineDataOnly: true, maxSeed: GEMINI_IMAGE_MAX_SEED,
+    maxReferenceImages: 10, maxSeed: GEMINI_IMAGE_MAX_SEED,
   },
   'gemini-3-pro-image': {
     aspectRatios: COMMON_GEMINI_RATIOS, imageSizes: ['1K', '2K', '4K'], supportsSampling: false,
     maxReferenceImages: 14, maxSeed: GEMINI_IMAGE_MAX_SEED,
   },
   'gemini-3.1-flash-image': {
+    // 512/0.5K 是官方档位但合作节点枚举不收（2026-08-29 线上
+    // value_not_in_list 实证；网关在扣费前拒绝且不做 1K 缩小替代）——
+    // 本地按枚举 1K/2K/4K 拦截，不把注定失败的请求发给上游。
     aspectRatios: EXTENDED_GEMINI_RATIOS, imageSizes: ['1K', '2K', '4K'], supportsSampling: true,
     maxReferenceImages: 14, maxSeed: GEMINI_IMAGE_MAX_SEED,
   },
   'gemini-3.1-flash-lite-image': {
-    aspectRatios: EXTENDED_GEMINI_RATIOS, imageSizes: ['1K'], supportsSampling: true,
+    // 2026-08-29（BaoPix 阻塞 3）：2K/4K 为披露复合输出——原生 1K 生成后
+    // 经 wavespeed-seedvr2 同比例放大；任务结果携带 native_resolution/
+    // output_resolution/postprocess 披露字段，生成模型不变。
+    aspectRatios: EXTENDED_GEMINI_RATIOS, imageSizes: ['1K', '2K', '4K'], supportsSampling: true,
     maxReferenceImages: 14, maxSeed: GEMINI_IMAGE_MAX_SEED,
   },
 };
@@ -619,7 +626,6 @@ export function validateGeminiImageGeneration(
     temperature?: number;
     topP?: number;
     referenceImageCount?: number;
-    nonDataUriReferenceCount?: number;
   },
 ): void {
   const constraint = GEMINI_IMAGE_CONSTRAINTS[model.trim()];
@@ -639,9 +645,6 @@ export function validateGeminiImageGeneration(
   }
   if (input.referenceImageCount !== undefined && constraint.maxReferenceImages !== undefined && input.referenceImageCount > constraint.maxReferenceImages) {
     throw new ApiError('invalid_request', `${model} supports at most ${constraint.maxReferenceImages} reference image${constraint.maxReferenceImages === 1 ? '' : 's'}`);
-  }
-  if (constraint.referenceImagesInlineDataOnly && input.nonDataUriReferenceCount) {
-    throw new ApiError('invalid_request', `${model} reference images must be base64 data URIs (inlineData); fileUri inputs are rejected by this model`);
   }
   if (!constraint.supportsSampling && (input.thinkingLevel || input.temperature !== undefined || input.topP !== undefined)) {
     throw new ApiError('invalid_request', `${model} supports thinkingLevel, temperature, and topP only on gemini-3.1-flash-image and gemini-3.1-flash-lite-image`);
