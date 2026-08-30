@@ -101,10 +101,10 @@ describe('validateImageGeneration 新图像族本地契约', () => {
     // BaoPix 阻塞 3：lite 2K/4K 是披露复合输出（原生 1K + SeedVR2 放大），本地放行。
     expect(() => validateGeminiImageGeneration('gemini-3.1-flash-lite-image', { imageSize: '2K' })).not.toThrow();
     expect(() => validateGeminiImageGeneration('gemini-3.1-flash-lite-image', { imageSize: '4k' })).not.toThrow();
-    // BaoPix 阻塞 2：512/0.5K 是官方档位但节点枚举不收（2026-08-29 实证），
-    // 网关扣费前拒绝——本地直接按枚举拦截，不发注定失败的请求。
-    expect(() => validateGeminiImageGeneration('gemini-3.1-flash-image', { imageSize: '512' })).toThrow(/imageSize must be one of 1K, 2K, 4K/);
-    expect(() => validateGeminiImageGeneration('gemini-3.1-flash-image', { imageSize: '0.5K' })).toThrow(/imageSize must be one of 1K, 2K, 4K/);
+    // BaoPix 阻塞 2：512/0.5K 是官方档位但节点枚举双拼写均拒（2026-08-30
+    // 实证），网关扣费前拒绝——本地给出带实证的专属拦截文案。
+    expect(() => validateGeminiImageGeneration('gemini-3.1-flash-image', { imageSize: '512' })).toThrow(/rejects both spellings/);
+    expect(() => validateGeminiImageGeneration('gemini-3.1-flash-image', { imageSize: '0.5K' })).toThrow(/smallest executable tier is 1K/);
     expect(() => validateGeminiImageGeneration('gemini-3.1-flash-image', { imageSize: '2K' })).not.toThrow();
   });
 

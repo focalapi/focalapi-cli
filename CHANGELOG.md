@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.7.9 - 2026-08-30
+
+- gemini-3.1-flash-image --image-size 512/0.5K now fails locally with the
+  full provider-constraint explanation: the partner node enum rejects BOTH
+  spellings (live value_not_in_list evidence 2026-08-30, two tasks refunded
+  at zero charge); the smallest executable tier is 1K. Constraint comments
+  also record the measured 4K extreme-ratio outputs (1:8 -> 1408x11712,
+  8:1 -> 11712x1408; upstream decides exact dimensions, gateway passes
+  bytes through untouched).
+
 ## 0.7.8 - 2026-08-29
 
 - gemini-2.5-flash-image accepts 1-10 reference images (multiple references

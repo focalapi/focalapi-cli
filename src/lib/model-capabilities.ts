@@ -429,9 +429,11 @@ const GEMINI_IMAGE_CONSTRAINTS: Record<string, GeminiImageConstraint> = {
     maxReferenceImages: 14, maxSeed: GEMINI_IMAGE_MAX_SEED,
   },
   'gemini-3.1-flash-image': {
-    // 512/0.5K 是官方档位但合作节点枚举不收（2026-08-29 线上
-    // value_not_in_list 实证；网关在扣费前拒绝且不做 1K 缩小替代）——
-    // 本地按枚举 1K/2K/4K 拦截，不把注定失败的请求发给上游。
+    // 512/0.5K 是官方档位但合作节点枚举不收：2026-08-30 线上实证 "512" 与
+    // "0.5K" 两种拼写均 value_not_in_list（双任务零扣费退款）。本地给出
+    // 带实证的专属拒绝文案（见 validateGeminiImageGeneration），不发注定
+    // 失败的请求。4K 极端比例（1:8/8:1）可执行，实际尺寸由上游决定
+    //（实测 1408x11712 / 11712x1408），网关字节级透传。
     aspectRatios: EXTENDED_GEMINI_RATIOS, imageSizes: ['1K', '2K', '4K'], supportsSampling: true,
     maxReferenceImages: 14, maxSeed: GEMINI_IMAGE_MAX_SEED,
   },
@@ -637,6 +639,11 @@ export function validateGeminiImageGeneration(
   }
   if (input.imageSize && !constraint.imageSizes?.includes(input.imageSize.toUpperCase())) {
     const supported = constraint.imageSizes?.join(', ') ?? 'none';
+    if (model.trim() === 'gemini-3.1-flash-image' && ['512', '0.5K'].includes(input.imageSize.toUpperCase())) {
+      // 双拼写线上实证（2026-08-30，双任务 value_not_in_list 零扣费退款）：
+      // 节点枚举只有 1K/2K/4K，网关在扣费前拒绝且不做 1K 缩小替代。
+      throw new ApiError('invalid_request', `${model} imageSize 512/0.5K is an official Gemini tier, but the partner node enum rejects both spellings (live value_not_in_list evidence 2026-08-30); the smallest executable tier is 1K (received: ${input.imageSize})`);
+    }
     throw new ApiError('invalid_request', `${model} imageSize must be one of ${supported} (received: ${input.imageSize})`);
   }
   if (input.seed !== undefined && (!Number.isInteger(input.seed) || input.seed < 0 || (constraint.maxSeed !== undefined && input.seed > constraint.maxSeed))) {
